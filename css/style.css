@@ -474,6 +474,8 @@ body {
   padding: 32px;
   max-width: 420px;
   width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   animation: modalIn 0.35s ease-out;
 }
@@ -671,4 +673,101 @@ body {
   .board-cell .element-level {
     font-size: 0.55rem;
   }
+}
+
+/* ============================================================
+ * 肉鸽模式专属样式
+ * ============================================================ */
+
+/* 肉鸽状态栏 */
+#rogue-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: linear-gradient(90deg, #2d1b00, #1a0f00);
+  border-bottom: 1px solid #ff980044;
+  font-size: 13px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rogue-floor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: rgba(255, 152, 0, 0.15);
+  border: 1px solid #ff980066;
+  border-radius: 8px;
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.rogue-gold-display {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.rogue-boon-indicators {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 300px;
+}
+
+.rogue-boon-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.rogue-boon-icon:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.9);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.rogue-boon-common { background: rgba(158,158,158,0.25); border: 1px solid #9e9e9e66; }
+.rogue-boon-rare { background: rgba(33,150,243,0.25); border: 1px solid #2196f366; }
+.rogue-boon-epic { background: rgba(156,39,176,0.25); border: 1px solid #9c27b066; }
+.rogue-boon-legendary { background: rgba(255,152,0,0.25); border: 1px solid #ff980066; }
+
+/* 菜单按钮悬停效果 */
+.menu-mode-btn:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 30px rgba(255,152,0,0.4) !important;
+}
+
+.small-menu-btn:hover {
+  background: rgba(255,255,255,0.15) !important;
+  color: #fff !important;
+}
+
+/* 肉鸽弹窗覆盖层动画 */
+#rogue-ui-container {
+  animation: rogueFadeIn 0.3s ease-out;
+}
+
+@keyframes rogueFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

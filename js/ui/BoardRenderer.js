@@ -14,6 +14,8 @@ class BoardRenderer {
     this.rows = 0;
     this.cells = [];
     this.selectedCell = null; // { row, col }
+    this._tripleSelectedCells = []; // [{ row, col }] — 三合一候选格子
+    this._resonatingCells = []; // [{ row, col }] — 元素共鸣高亮格子
     this.onCellClick = null;   // 回调: (row, col) => void
     this._animatingCells = new Set();
   }
@@ -80,6 +82,14 @@ class BoardRenderer {
       if (this.selectedCell && this.selectedCell.row === row && this.selectedCell.col === col) {
         cell.classList.add('selected');
       }
+      // 三合一候选状态
+      if (this._tripleSelectedCells.some(c => c.row === row && c.col === col)) {
+        cell.classList.add('triple-candidate');
+      }
+      // 元素共鸣状态
+      if (this._resonatingCells.some(c => c.row === row && c.col === col)) {
+        cell.classList.add('resonating');
+      }
     } else {
       cell.className = 'board-cell empty';
     }
@@ -126,6 +136,54 @@ class BoardRenderer {
       if (cell) cell.classList.remove('selected');
       this.selectedCell = null;
     }
+  }
+
+  /**
+   * 设置三合一候选格子（高亮多个格子）
+   * @param {Array<{row: number, col: number}>} candidates - 候选位置列表
+   */
+  setTripleCandidates(candidates) {
+    this.clearTripleCandidates();
+    for (const { row, col } of candidates) {
+      const cell = this.cells[row]?.[col];
+      if (cell) {
+        cell.classList.add('triple-candidate');
+        this._tripleSelectedCells.push({ row, col });
+      }
+    }
+  }
+
+  /** 清除三合一候选高亮 */
+  clearTripleCandidates() {
+    for (const { row, col } of this._tripleSelectedCells) {
+      const cell = this.cells[row]?.[col];
+      if (cell) cell.classList.remove('triple-candidate');
+    }
+    this._tripleSelectedCells = [];
+  }
+
+  /**
+   * 设置元素共鸣高亮（棋盘上所有同类型元素获得临时视觉特效）
+   * @param {Array<{row: number, col: number}>} cells - 要高亮的格子列表
+   */
+  setResonating(cells) {
+    this.clearResonating();
+    for (const { row, col } of cells) {
+      const cell = this.cells[row]?.[col];
+      if (cell) {
+        cell.classList.add('resonating');
+        this._resonatingCells.push({ row, col });
+      }
+    }
+  }
+
+  /** 清除元素共鸣高亮 */
+  clearResonating() {
+    for (const { row, col } of this._resonatingCells) {
+      const cell = this.cells[row]?.[col];
+      if (cell) cell.classList.remove('resonating');
+    }
+    this._resonatingCells = [];
   }
 
   /**

@@ -21,27 +21,67 @@ class Emitter {
     this.lastSpawnTime = 0;
     this.isReady = true;
     this.totalSpawns = 0;
+
+    // 祝福修饰器（肉鸽模式使用）
+    this.modifiers = {
+      cooldownMultiplier: 1.0,
+      dualChance: 0,
+      spawnLevelBonus: 0,
+      upgradeChance: 0,
+      randomType: false,
+      _typePool: [],
+    };
+  }
+
+  /** 获取实际冷却时间（考虑祝福修正） */
+  getActualCooldown() {
+    return this.cooldownMs * this.modifiers.cooldownMultiplier;
   }
 
   /** 检查发射器是否就绪 */
   isReadyToSpawn(currentTime) {
-    return currentTime - this.lastSpawnTime >= this.cooldownMs;
+    return currentTime - this.lastSpawnTime >= this.getActualCooldown();
   }
 
-  /** 执行产出，返回新的 Element 实例 */
+  /** 执行产出，返回 Element 实例或数组（双重产出） */
   spawn(currentTime) {
     if (!this.isReadyToSpawn(currentTime)) {
       return null;
     }
     this.lastSpawnTime = currentTime;
     this.totalSpawns++;
-    return new Element(this.elementType, this.spawnLevel);
+
+    const results = [];
+    const count = Math.random() < this.modifiers.dualChance ? 2 : 1;
+
+    for (let i = 0; i < count; i++) {
+      let type = this.elementType;
+      if (this.modifiers.randomType && this.modifiers._typePool.length > 0) {
+        type = this.modifiers._typePool[Math.floor(Math.random() * this.modifiers._typePool.length)];
+      }
+      let level = this.spawnLevel + this.modifiers.spawnLevelBonus;
+      if (Math.random() < this.modifiers.upgradeChance) {
+        level += 1;
+      }
+      level = Math.min(level, ELEMENT_LEVELS.length);
+      results.push(new Element(type, level));
+    }
+
+    // 兼容原有单元素返回逻辑
+    return results[0];
   }
 
   /** 获取冷却进度 (0~1) */
   getCooldownProgress(currentTime) {
     const elapsed = currentTime - this.lastSpawnTime;
-    return Math.min(elapsed / this.cooldownMs, 1);
+    const actualCd = this.getActualCooldown();
+    return Math.min(elapsed / actualCd, 1);
+  }
+
+  /** 重置冷却 */
+  resetCooldown() {
+    this.lastSpawnTime = 0;
+    this.isReady = true;
   }
 
   /** 重置冷却 */
@@ -56,6 +96,7 @@ class Emitter {
       id: this.id,
       lastSpawnTime: this.lastSpawnTime,
       totalSpawns: this.totalSpawns,
+      modifiers: { ...this.modifiers },
     };
   }
 
@@ -66,6 +107,9 @@ class Emitter {
     const emitter = new Emitter(config);
     emitter.lastSpawnTime = data.lastSpawnTime;
     emitter.totalSpawns = data.totalSpawns;
+    if (data.modifiers) {
+      emitter.modifiers = { ...emitter.modifiers, ...data.modifiers };
+    }
     return emitter;
   }
 }

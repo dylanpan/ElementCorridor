@@ -29,6 +29,16 @@
     </div>
   </header>
 
+  <!-- ====== 肉鸽模式状态栏（默认隐藏） ====== -->
+  <div id="rogue-status-bar" style="display:none;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="rogue-floor-badge">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
+      <span class="rogue-gold-display">🪙 <span id="rogue-gold">0</span></span>
+      <button id="rogue-map-btn" class="tool-btn" style="padding:3px 10px;font-size:12px;" title="查看当前层路线图">🗺 地图</button>
+    </div>
+    <div class="rogue-boon-indicators" id="rogue-boon-bar"></div>
+  </div>
+
   <!-- ====== 主游戏区域 ====== -->
   <main id="game-main">
     <!-- 左侧：关卡信息 + 发射器 -->
@@ -101,12 +111,20 @@
   <script src="js/systems/SpawnSystem.js"></script>
   <script src="js/systems/OrderSystem.js"></script>
 
+  <!-- ====== 肉鸽模式系统（依赖 config + EventBus + 实体） ====== -->
+  <script src="js/config/rogueConfig.js"></script>
+  <script src="js/systems/BoonSystem.js"></script>
+  <script src="js/systems/EventSystem.js"></script>
+  <script src="js/systems/RogueSystem.js"></script>
+  <script src="js/systems/MetaProgress.js"></script>
+
   <!-- ====== 第4层：核心引擎（依赖所有系统） ====== -->
   <script src="js/core/GameEngine.js"></script>
 
   <!-- ====== 第5层：UI渲染（依赖引擎） ====== -->
   <script src="js/ui/BoardRenderer.js"></script>
   <script src="js/ui/UIManager.js"></script>
+  <script src="js/ui/RogueUIManager.js"></script>
 
   <!-- ====== 第6层：工具与入口（依赖全部上层） ====== -->
   <script src="js/utils/StorageManager.js"></script>

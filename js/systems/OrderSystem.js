@@ -148,18 +148,21 @@ class OrderSystem {
   /**
    * 刷新所有订单（消耗积分）
    * @param {number} score - 当前积分
+   * @param {boolean} free - 是否免费刷新
    * @returns {object|null} - { cost, newOrders } 或 null（积分不足）
    */
-  refreshOrders(score) {
-    const cost = GAME_SETTINGS.orderRefreshCost;
-    if (score < cost) return null;
-
-    this.orders = [];
-    const newOrders = this.fillOrders();
-
-    const result = { cost, newOrders };
-    window.eventBus.emit('orders:refreshed', result);
-    return result;
+  refreshOrders(score, free = false) {
+    if (!free) {
+      const cost = GAME_SETTINGS.orderRefreshCost;
+      if (score < cost) return null;
+      this.orders = [];
+      const newOrders = this.fillOrders();
+      return { cost, newOrders };
+    } else {
+      this.orders = [];
+      const newOrders = this.fillOrders();
+      return { cost: 0, newOrders };
+    }
   }
 
   /**

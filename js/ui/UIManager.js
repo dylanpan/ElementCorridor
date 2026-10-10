@@ -58,11 +58,18 @@ class UIManager {
     });
 
     window.eventBus.on('game:over', (data) => {
+      // 肉鸽模式不显示经典通关弹窗，由肉鸽UI接管
+      if (data && data.isRogue) return;
       this.showModal('🎉 恭喜通关！', `你成功完成了第 ${data.level} 关！<br>最终得分：${data.score}`);
     });
 
     window.eventBus.on('game:failed', (data) => {
+      // 肉鸽模式不显示经典失败弹窗，由肉鸽UI接管
+      if (data && data.isRogue) return;
       this.showModal('😅 棋盘已满', '棋盘上没有空位了，试试重新开始吧！');
+      this.setModalButtonCallback(() => {
+        window.location.reload();
+      });
     });
 
     window.eventBus.on('notification', (data) => {
