@@ -268,11 +268,83 @@ body {
   width: 100%;
 }
 
+/* ==================== 棋盘上方信息栏 ==================== */
+#board-top-bar {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto 8px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#board-score-area {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.board-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+
+.board-score-label {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.board-score-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+  min-width: 40px;
+  text-align: right;
+}
+
+.board-score-sep {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.board-target-value {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  min-width: 30px;
+}
+
+.board-progress-track {
+  margin-top: 6px;
+  height: 5px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.board-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffd700, #ff9800);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+#board-boon-area {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
 /* ==================== 棋盘 ==================== */
 #board-container {
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding-top: 8px;
 }
 
@@ -721,13 +793,19 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  box-shadow: 0 0 6px rgba(255,255,255,0.08);
+}
+
+.rogue-boon-icon:hover {
+  transform: scale(1.2);
+  z-index: 10;
 }
 
 .rogue-boon-icon:hover::after {
@@ -746,10 +824,62 @@ body {
   pointer-events: none;
 }
 
-.rogue-boon-common { background: rgba(158,158,158,0.25); border: 1px solid #9e9e9e66; }
-.rogue-boon-rare { background: rgba(33,150,243,0.25); border: 1px solid #2196f366; }
-.rogue-boon-epic { background: rgba(156,39,176,0.25); border: 1px solid #9c27b066; }
-.rogue-boon-legendary { background: rgba(255,152,0,0.25); border: 1px solid #ff980066; }
+.rogue-boon-common { background: rgba(158,158,158,0.25); border: 1.5px solid #9e9e9e88; }
+.rogue-boon-rare { background: rgba(33,150,243,0.2); border: 1.5px solid #2196f388; box-shadow: 0 0 8px rgba(33,150,243,0.2); }
+.rogue-boon-epic { background: rgba(156,39,176,0.2); border: 1.5px solid #9c27b088; box-shadow: 0 0 8px rgba(156,39,176,0.2); }
+.rogue-boon-legendary { background: rgba(255,152,0,0.2); border: 1.5px solid #ff980088; box-shadow: 0 0 10px rgba(255,152,0,0.3); animation: legendaryGlow 2s ease-in-out infinite; }
+
+@keyframes legendaryGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,152,0,0.3); }
+  50% { box-shadow: 0 0 14px rgba(255,152,0,0.6); }
+}
+
+/* 诅咒图标：方形+对角斜纹背景 */
+.rogue-curse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(244,67,54,0.18) 0px,
+    rgba(244,67,54,0.18) 3px,
+    rgba(180,30,30,0.12) 3px,
+    rgba(180,30,30,0.12) 6px
+  );
+  border: 1.5px solid #c6282888;
+  box-shadow: 0 0 4px rgba(244,67,54,0.15), inset 0 0 6px rgba(244,67,54,0.05);
+}
+
+.rogue-curse-icon:hover {
+  transform: scale(1.2) rotate(5deg);
+  z-index: 10;
+  border-color: #f44336cc;
+  box-shadow: 0 0 10px rgba(244,67,54,0.35), inset 0 0 8px rgba(244,67,54,0.1);
+}
+
+.rogue-curse-icon:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(40,0,0,0.95);
+  color: #ff8a80;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 999;
+  pointer-events: none;
+  border: 1px solid #f4433666;
+}
 
 /* 菜单按钮悬停效果 */
 .menu-mode-btn:hover {

@@ -50,6 +50,11 @@
     // 注册肉鸽事件
     registerRogueEvents();
 
+    // 监听积分更新 → 更新棋盘上方显示
+    window.eventBus.on('score:updated', (data) => {
+      updateBoardScoreDisplay(data.score, data.targetScore);
+    });
+
     // 显示主菜单
     showMainMenu();
   }
@@ -430,7 +435,7 @@
   function updateRogueStatusBar() {
     const floorNum = document.getElementById('rogue-floor-num');
     const goldDisplay = document.getElementById('rogue-gold');
-    const boonBar = document.getElementById('rogue-boon-bar');
+    const boardBoonArea = document.getElementById('board-boon-area');
 
     if (floorNum && rogueSystem) {
       floorNum.textContent = rogueSystem.getCurrentFloor();
@@ -438,7 +443,9 @@
     if (goldDisplay && rogueSystem) {
       goldDisplay.textContent = rogueSystem.getGold();
     }
-    if (boonBar && boonSystem) {
+
+    // 更新棋盘上方的祝福区域
+    if (boardBoonArea && boonSystem) {
       const boons = boonSystem.getBoonSummary();
       const curses = boonSystem.getCurseSummary();
       let html = '';
@@ -446,9 +453,22 @@
         html += `<span class="rogue-boon-icon rogue-boon-${b.rarity}" data-tooltip="${b.name}: ${b.description}">${b.icon}</span>`;
       }
       for (const c of curses) {
-        html += `<span class="rogue-boon-icon" style="background:rgba(244,67,54,0.2);border:1px solid #f4433666;" data-tooltip="诅咒: ${c.name}">${c.icon}</span>`;
+        html += `<span class="rogue-curse-icon" data-tooltip="诅咒: ${c.name}">${c.icon}</span>`;
       }
-      boonBar.innerHTML = html;
+      boardBoonArea.innerHTML = html;
+    }
+  }
+
+  /** 更新棋盘上方的积分显示与进度条 */
+  function updateBoardScoreDisplay(score, targetScore) {
+    const scoreEl = document.getElementById('board-score-display');
+    const targetEl = document.getElementById('board-target-display');
+    const progressFill = document.getElementById('board-progress-fill');
+    if (scoreEl) scoreEl.textContent = score;
+    if (targetEl) targetEl.textContent = targetScore;
+    if (progressFill && targetScore > 0) {
+      const pct = Math.min(100, Math.round(score / targetScore * 100));
+      progressFill.style.width = pct + '%';
     }
   }
 

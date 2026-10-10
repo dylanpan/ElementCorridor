@@ -14,12 +14,6 @@
       <span id="current-level" class="level-badge">第 1 关</span>
     </div>
     <div class="header-center">
-      <div class="score-display">
-        <span class="score-label">积分</span>
-        <span id="score-display" class="score-value">0</span>
-        <span class="score-sep">/</span>
-        <span id="target-score" class="score-target">100</span>
-      </div>
       <div id="combo-display" class="combo-display"></div>
     </div>
     <div class="header-right">
@@ -36,7 +30,6 @@
       <span class="rogue-gold-display">🪙 <span id="rogue-gold">0</span></span>
       <button id="rogue-map-btn" class="tool-btn" style="padding:3px 10px;font-size:12px;" title="查看当前层路线图">🗺 地图</button>
     </div>
-    <div class="rogue-boon-indicators" id="rogue-boon-bar"></div>
   </div>
 
   <!-- ====== 主游戏区域 ====== -->
@@ -58,6 +51,21 @@
 
     <!-- 中间：游戏棋盘 -->
     <section id="board-container">
+      <!-- 棋盘上方信息栏：积分进度 + 祝福图标 -->
+      <div id="board-top-bar">
+        <div id="board-score-area">
+          <div class="board-score-row">
+            <span class="board-score-label">积分</span>
+            <span id="board-score-display" class="board-score-value">0</span>
+            <span class="board-score-sep">/</span>
+            <span id="board-target-display" class="board-target-value">100</span>
+          </div>
+          <div class="board-progress-track">
+            <div id="board-progress-fill" class="board-progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="board-boon-area"></div>
+      </div>
       <div id="game-board" class="game-board"></div>
     </section>
 
