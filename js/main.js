@@ -419,16 +419,28 @@
     };
   }
 
-  /** 显示肉鸽模式状态栏 */
+  /** 显示肉鸽模式左侧面板 */
   function showRogueStatusBar() {
-    const bar = document.getElementById('rogue-status-bar');
-    if (bar) bar.style.display = 'flex';
+    // 切换左侧面板：隐藏经典关卡信息，显示肉鸽信息
+    const classicInfo = document.getElementById('classic-level-info');
+    const rogueInfo = document.getElementById('rogue-level-info');
+    if (classicInfo) classicInfo.style.display = 'none';
+    if (rogueInfo) rogueInfo.style.display = 'flex';
+    // 隐藏顶部标题
+    const headerLeft = document.querySelector('.header-left');
+    if (headerLeft) headerLeft.style.display = 'none';
   }
 
-  /** 隐藏肉鸽模式状态栏 */
+  /** 隐藏肉鸽模式左侧面板 */
   function hideRogueStatusBar() {
-    const bar = document.getElementById('rogue-status-bar');
-    if (bar) bar.style.display = 'none';
+    // 恢复左侧面板：显示经典关卡信息，隐藏肉鸽信息
+    const classicInfo = document.getElementById('classic-level-info');
+    const rogueInfo = document.getElementById('rogue-level-info');
+    if (classicInfo) classicInfo.style.display = 'block';
+    if (rogueInfo) rogueInfo.style.display = 'none';
+    // 恢复顶部标题
+    const headerLeft = document.querySelector('.header-left');
+    if (headerLeft) headerLeft.style.display = 'flex';
   }
 
   /** 更新肉鸽状态栏 */
@@ -480,9 +492,9 @@
       showRogueStatusBar();
       updateRogueStatusBar();
 
-      // 绑定地图查看按钮
+      // 绑定左侧面板的地图按钮
       setTimeout(() => {
-        const mapBtn = document.getElementById('rogue-map-btn');
+        const mapBtn = document.getElementById('rogue-map-btn-side');
         if (mapBtn) {
           mapBtn.onclick = () => {
             const data = rogueUIManager.getFloorMapData();

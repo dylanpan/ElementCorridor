@@ -201,6 +201,34 @@ body {
   color: var(--text-secondary);
 }
 
+/* 肉鸽模式左侧面板信息 */
+.rogue-level-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rogue-level-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rogue-map-btn {
+  width: 100%;
+  text-align: center;
+  padding: 8px 14px !important;
+  background: rgba(255,152,0,0.12) !important;
+  border-color: #ff980066 !important;
+  color: #ffd700 !important;
+  font-size: 13px !important;
+}
+
+.rogue-map-btn:hover {
+  background: rgba(255,152,0,0.25) !important;
+  border-color: #ff9800 !important;
+}
+
 /* 发射器网格 */
 .emitters-grid {
   display: flex;

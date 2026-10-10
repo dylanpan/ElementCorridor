@@ -23,23 +23,24 @@
     </div>
   </header>
 
-  <!-- ====== 肉鸽模式状态栏（默认隐藏） ====== -->
-  <div id="rogue-status-bar" style="display:none;">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <span class="rogue-floor-badge">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
-      <span class="rogue-gold-display">🪙 <span id="rogue-gold">0</span></span>
-      <button id="rogue-map-btn" class="tool-btn" style="padding:3px 10px;font-size:12px;" title="查看当前层路线图">🗺 地图</button>
-    </div>
-  </div>
-
   <!-- ====== 主游戏区域 ====== -->
   <main id="game-main">
     <!-- 左侧：关卡信息 + 发射器 -->
     <aside id="left-panel">
-      <section class="panel-section level-info">
+      <!-- 经典模式关卡信息 -->
+      <section class="panel-section level-info" id="classic-level-info">
         <h3 class="panel-title">📋 关卡信息</h3>
         <p id="level-title" class="level-title-text">第1关 · 初识元素</p>
         <p id="level-description" class="level-desc-text">掌握基础元素的合成与提交</p>
+      </section>
+
+      <!-- 肉鸽模式信息（默认隐藏） -->
+      <section class="panel-section rogue-level-info" id="rogue-level-info" style="display:none;">
+        <div class="rogue-level-top">
+          <span class="rogue-floor-badge">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
+          <span class="rogue-gold-display">🪙 <span id="rogue-gold">0</span></span>
+        </div>
+        <button id="rogue-map-btn-side" class="tool-btn rogue-map-btn" title="查看当前层路线图">🗺 查看路线图</button>
       </section>
 
       <section class="panel-section emitters-section">
