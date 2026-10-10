@@ -35,6 +35,7 @@ class RogueSystem {
       targetScoreForFloor: 80,
       bossDefeated: false,
       floorHistory: [],
+      floorNodeHistory: [], // 每层完整节点列表 [{floor, nodes, targetScore}]
     };
     this.nextDifficultyBoost = 1.0;
     this.orderPenalty = 1.0;
@@ -118,6 +119,15 @@ class RogueSystem {
 
   /** 进入下一层 */
   nextFloor() {
+    // 保存当前层节点到历史（在递增层数之前）
+    if (this.state.nodes.length > 0) {
+      this.state.floorNodeHistory.push({
+        floor: this.state.currentFloor,
+        nodes: JSON.parse(JSON.stringify(this.state.nodes)),
+        targetScore: this.state.targetScoreForFloor,
+      });
+    }
+
     this.state.currentFloor++;
     if (this.state.currentFloor > FLOOR_GENERATOR.maxFloor) {
       this.winRun();
@@ -153,6 +163,11 @@ class RogueSystem {
   /** 获取当前层数 */
   getCurrentFloor() {
     return this.state.currentFloor;
+  }
+
+  /** 获取历史层路线图数据（已通关的层） */
+  getFloorHistory() {
+    return this.state.floorNodeHistory;
   }
 
   /** 获取最大层数 */

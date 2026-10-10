@@ -321,9 +321,9 @@ class RogueUIManager {
 
   showFloorMap(data) {
     const overlay = this._createOverlay();
-    const { floor, nodes } = data;
+    const { floor, nodes, isHistory } = data;
     // 判断是否正在战斗中（战斗中查看地图时只返回，不触发开始挑战）
-    const isInBattle = this.gameEngine && this.gameEngine.state && this.gameEngine.state.isPlaying;
+    const isInBattle = !isHistory && this.gameEngine && this.gameEngine.state && this.gameEngine.state.isPlaying;
 
     const typeIcons = {
       combat: '⚔️', elite: '💀', boon: '✨', shop: '🏪',
@@ -369,7 +369,7 @@ class RogueUIManager {
       <button id="floor-start-btn" style="
         margin-top:16px; padding:10px 48px; background:linear-gradient(135deg,#ffd700,#ff9800);
         color:#000; border:none; border-radius:8px; cursor:pointer; font-size:15px; font-weight:bold;
-      ">${isInBattle ? '返回' : '开始挑战'}</button>
+      ">${isHistory ? '返回' : isInBattle ? '返回' : '开始挑战'}</button>
     `;
 
     overlay.appendChild(dialog);
@@ -377,11 +377,100 @@ class RogueUIManager {
 
     dialog.querySelector('#floor-start-btn').onclick = () => {
       this.closeTopOverlay();
-      if (!isInBattle) {
+      if (!isHistory && !isInBattle) {
         this._startCurrentNode();
       }
-      // 战斗中查看地图时，点击"返回"只关闭弹窗
+      // 历史模式或战斗中查看地图时，点击"返回"只关闭弹窗
     };
+  }
+
+  /** 展示历史路线图列表（已通关的层） */
+  showFloorHistory() {
+    const history = this.rogueSystem.getFloorHistory();
+    const overlay = this._createOverlay();
+
+    const typeIcons = {
+      combat: '⚔', elite: '💀', boon: '✨', shop: '🏪',
+      event: '❓', rest: '🏕', boss: '👑',
+    };
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 16px; max-width: 520px; width: 90%;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6); text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex; flex-direction: column; max-height: 75vh;
+    `;
+
+    // === 标题区（固定） ===
+    const header = document.createElement('div');
+    header.style.cssText = 'padding: 24px 24px 8px; flex-shrink: 0;';
+    header.innerHTML = `<h2 style="color:#ffd700; margin:0; font-size:18px;">📜 历史路线</h2>`;
+
+    // === 列表区（可滚动） ===
+    const listArea = document.createElement('div');
+    listArea.style.cssText = 'padding: 4px 18px 4px 22px; overflow-y: auto; flex: 1; min-height: 60px;';
+
+    if (history.length === 0) {
+      listArea.innerHTML = `<p style="color:#aaa; margin:20px 0;">还没有通关的层数记录</p>`;
+    } else {
+      let itemsHtml = `<p style="color:#aaa; margin:0 0 10px; font-size:13px;">点击某层查看完整路线图</p>`;
+      history.forEach((floorData, idx) => {
+        const floorNum = floorData.floor;
+        const nodeCount = floorData.nodes.length;
+        const icons = floorData.nodes.map(n => typeIcons[n.type] || '⬜').join(' ');
+        itemsHtml += `
+          <div class="history-floor-item" data-floor-idx="${idx}" style="
+            background:rgba(255,255,255,0.05); border-radius:10px; padding:12px 14px; margin-bottom:8px;
+            cursor:pointer; border:1px solid rgba(255,255,255,0.1);
+            transition:background 0.2s; text-align:left;
+          " onmouseover="this.style.background='rgba(76,175,80,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="color:#ffd700;font-weight:bold;font-size:15px;">🏰 第 ${floorNum} 层</span>
+              <span style="color:#888;font-size:11px;">${nodeCount} 个节点 · ${floorData.targetScore} 分</span>
+            </div>
+            <div style="margin-top:5px;font-size:18px;letter-spacing:3px;">${icons}</div>
+          </div>
+        `;
+      });
+      listArea.innerHTML = itemsHtml;
+    }
+
+    // === 底部按钮区（固定） ===
+    const footer = document.createElement('div');
+    footer.style.cssText = 'padding: 8px 24px 20px; flex-shrink: 0;';
+    footer.innerHTML = `<button id="history-close-btn" style="
+      padding:8px 36px; background:rgba(255,255,255,0.08);
+      color:#ccc; border:1px solid rgba(255,255,255,0.15); border-radius:8px;
+      cursor:pointer; font-size:14px;
+    ">关闭</button>`;
+
+    dialog.appendChild(header);
+    dialog.appendChild(listArea);
+    dialog.appendChild(footer);
+    overlay.appendChild(dialog);
+    this._showOverlay(overlay);
+
+    // 绑定历史层点击事件
+    history.forEach((floorData, idx) => {
+      const item = listArea.querySelector(`[data-floor-idx="${idx}"]`);
+      if (item) {
+        item.onclick = () => {
+          this.closeTopOverlay();
+          setTimeout(() => {
+            this.showFloorMap({
+              floor: floorData.floor,
+              nodes: floorData.nodes,
+              targetScore: floorData.targetScore,
+              isHistory: true,
+            });
+          }, 150);
+        };
+      }
+    });
+
+    dialog.querySelector('#history-close-btn').onclick = () => this.closeTopOverlay();
   }
 
   /** 开始当前节点（公开方法，供外部调用） */

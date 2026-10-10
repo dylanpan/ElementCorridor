@@ -501,6 +501,13 @@
             window.eventBus.emit('rogue:show-floor-map', data);
           };
         }
+        // 绑定层数徽章点击 → 展示历史路线图
+        const floorBtn = document.getElementById('rogue-floor-btn');
+        if (floorBtn) {
+          floorBtn.onclick = () => {
+            rogueUIManager.showFloorHistory();
+          };
+        }
       }, 100);
     });
 
