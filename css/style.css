@@ -929,3 +929,550 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ==================== 棋盘连击显示 ==================== */
+#board-combo-area {
+  text-align: center;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.board-combo-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  background: rgba(255, 215, 0, 0.06);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  transition: all 0.25s ease;
+}
+
+.board-combo-count-text {
+  color: var(--accent-gold);
+  font-size: 1.15rem;
+  letter-spacing: 0.5px;
+}
+
+.board-combo-multiplier-text {
+  color: #ff9800;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* 连击跳动动画：scale 1 → 1.3 → 1 */
+.board-combo-display.combo-jump {
+  animation: comboJump 0.35s ease-out;
+}
+
+@keyframes comboJump {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.3); }
+  65%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+/* Combo Break 红色闪烁动画 */
+.board-combo-display.combo-break {
+  animation: comboBreakFlash 0.7s ease-in-out forwards;
+}
+
+.board-combo-display.combo-break .board-combo-count-text,
+.board-combo-display.combo-break .board-combo-multiplier-text {
+  color: var(--accent-red) !important;
+}
+
+@keyframes comboBreakFlash {
+  0%   { opacity: 1; transform: scale(1);     background: rgba(244,67,54,0);     border-color: transparent; }
+  20%  { opacity: 1; transform: scale(1.18);  background: rgba(244,67,54,0.20);  border-color: #f44366aa; }
+  40%  { opacity: 1; transform: scale(1.05);  background: rgba(244,67,54,0.12);  border-color: #f4436688; }
+  60%  { opacity: 1; transform: scale(1.12);  background: rgba(244,67,54,0.16);  border-color: #f4436699; }
+  80%  { opacity: 0.6; transform: scale(0.9); background: rgba(244,67,54,0.08);  border-color: transparent; }
+  100% { opacity: 0; transform: scale(0.75);  background: transparent;           border-color: transparent; }
+}
+
+/* ==================== 订单弹跳数字 ==================== */
+.bounce-score {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* 普通订单 (<50分)：白色向上飘移 */
+.bounce-score-normal {
+  color: #ffffff;
+  font-size: 1.4rem;
+  animation: bounceNormal 1s ease-out forwards;
+}
+
+@keyframes bounceNormal {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  60%  { opacity: 0.8; transform: translateY(-50px) scale(1.05); }
+  100% { opacity: 0; transform: translateY(-80px) scale(0.95); }
+}
+
+/* 大额订单 (50~100分)：金色放大+旋转 */
+.bounce-score-large {
+  color: #ffd700;
+  font-size: 1.9rem;
+  text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+  animation: bounceLarge 1s ease-out forwards;
+}
+
+@keyframes bounceLarge {
+  0%   { opacity: 1; transform: translateY(0) scale(0.7) rotate(-5deg); }
+  35%  { opacity: 1; transform: translateY(-25px) scale(1.4) rotate(8deg); }
+  65%  { opacity: 0.9; transform: translateY(-55px) scale(1.15) rotate(-3deg); }
+  100% { opacity: 0; transform: translateY(-95px) scale(0.85) rotate(0deg); }
+}
+
+/* 巨额订单 (>100分)：金色数字+星形粒子光效 */
+.bounce-score-epic {
+  color: #ffd700;
+  font-size: 2.4rem;
+  text-shadow:
+    0 0 20px rgba(255, 215, 0, 0.7),
+    0 0 40px rgba(255, 152, 0, 0.3);
+  animation: bounceEpic 1.2s ease-out forwards;
+}
+
+@keyframes bounceEpic {
+  0%   { opacity: 1; transform: translateY(0) scale(0.5); }
+  25%  { opacity: 1; transform: translateY(-18px) scale(1.6); }
+  50%  { opacity: 0.95; transform: translateY(-45px) scale(1.25); }
+  75%  { opacity: 0.7; transform: translateY(-80px) scale(1.0); }
+  100% { opacity: 0; transform: translateY(-120px) scale(0.7); }
+}
+
+/* 星形粒子 */
+.bounce-star-particle {
+  position: absolute;
+  pointer-events: none;
+  font-size: 1rem;
+  animation: starParticle 1s ease-out forwards;
+}
+
+@keyframes starParticle {
+  0%   { opacity: 1; transform: translate(0, 0) scale(0.5) rotate(0deg); }
+  50%  { opacity: 0.8; transform: translate(var(--dx), var(--dy)) scale(1.2) rotate(180deg); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.8), calc(var(--dy) * 1.8)) scale(0.3) rotate(360deg); }
+}
+
+/* ==================== 进度横幅 ==================== */
+.progress-banner-container {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-120px);
+  z-index: 998;
+  pointer-events: none;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.progress-banner-container.show {
+  transform: translateX(-50%) translateY(0);
+}
+
+.progress-banner-container.hide {
+  transform: translateX(-50%) translateY(-140px);
+}
+
+.progress-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  border-radius: 14px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+}
+
+.progress-banner-icon {
+  font-size: 1.5rem;
+}
+
+.progress-banner-text {
+  letter-spacing: 1px;
+}
+
+/* 各进度颜色 */
+.progress-banner-25 {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.22), rgba(33, 150, 243, 0.08));
+  border: 1px solid rgba(33, 150, 243, 0.45);
+  color: #64b5f6;
+}
+
+.progress-banner-50 {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.22), rgba(156, 39, 176, 0.08));
+  border: 1px solid rgba(156, 39, 176, 0.45);
+  color: #ce93d8;
+}
+
+.progress-banner-75 {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.22), rgba(255, 152, 0, 0.08));
+  border: 1px solid rgba(255, 152, 0, 0.45);
+  color: #ffb74d;
+}
+
+.progress-banner-100 {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.28), rgba(255, 193, 7, 0.12));
+  border: 1px solid rgba(255, 215, 0, 0.55);
+  color: #ffd700;
+  box-shadow: 0 8px 36px rgba(255, 215, 0, 0.25);
+}
+
+/* ==================== 合成等级特效 ==================== */
+
+/* 全屏白色闪光（稀有 Lv.4） */
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 997;
+  pointer-events: none;
+}
+
+.flash-white {
+  background: rgba(255, 255, 255, 0.6);
+  animation: flashWhiteOut 0.35s ease-out forwards;
+}
+
+@keyframes flashWhiteOut {
+  0%   { opacity: 1; }
+  60%  { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+
+/* 全屏金色闪烁（史诗 Lv.5） */
+.flash-gold {
+  background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.55), rgba(255, 152, 0, 0.15));
+  animation: flashGoldOut 0.45s ease-out forwards;
+}
+
+@keyframes flashGoldOut {
+  0%   { opacity: 1; }
+  40%  { opacity: 0.7; }
+  80%  { opacity: 0.2; }
+  100% { opacity: 0; }
+}
+
+/* 屏幕震动 */
+.screen-shake {
+  animation: screenShake var(--shake-duration, 0.2s) ease-out;
+}
+
+@keyframes screenShake {
+  0%   { transform: translate(0, 0); }
+  10%  { transform: translate(calc(var(--shake-intensity, 5px) * -1), calc(var(--shake-intensity, 5px) * -0.6)); }
+  20%  { transform: translate(var(--shake-intensity, 5px), calc(var(--shake-intensity, 5px) * 0.4)); }
+  30%  { transform: translate(calc(var(--shake-intensity, 5px) * -0.6), calc(var(--shake-intensity, 5px) * 0.8)); }
+  40%  { transform: translate(var(--shake-intensity, 5px), calc(var(--shake-intensity, 5px) * -0.4)); }
+  50%  { transform: translate(calc(var(--shake-intensity, 5px) * -0.4), calc(var(--shake-intensity, 5px) * -0.8)); }
+  60%  { transform: translate(calc(var(--shake-intensity, 5px) * 0.6), calc(var(--shake-intensity, 5px) * 0.6)); }
+  70%  { transform: translate(calc(var(--shake-intensity, 5px) * -0.8), calc(var(--shake-intensity, 5px) * -0.2)); }
+  80%  { transform: translate(calc(var(--shake-intensity, 5px) * 0.3), calc(var(--shake-intensity, 5px) * -0.6)); }
+  90%  { transform: translate(calc(var(--shake-intensity, 5px) * -0.2), calc(var(--shake-intensity, 5px) * 0.4)); }
+  100% { transform: translate(0, 0); }
+}
+
+/* 暂停慢放遮罩（传说 Lv.6） */
+.time-freeze-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 996;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(1px);
+  pointer-events: none;
+  animation: timeFreezeFade 0.65s ease-in-out forwards;
+}
+
+@keyframes timeFreezeFade {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { opacity: 0.9; }
+  90%  { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+/* ===== 元素共鸣（祝福） ===== */
+.resonating {
+  animation: resonatingPulse 1.0s ease-in-out infinite;
+  position: relative;
+  z-index: 2;
+}
+
+.resonating::after {
+  content: '🌈';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 11px;
+  opacity: 0.9;
+  pointer-events: none;
+  animation: resonatingIcon 0.9s ease-in-out infinite;
+}
+
+@keyframes resonatingPulse {
+  0%, 100% { 
+    background-color: rgba(128, 128, 128, 0.08);
+    transform: scale(1);
+  }
+  50% { 
+    background-color: rgba(200, 200, 200, 0.15);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes resonatingIcon {
+  0%, 50%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-8deg); }
+  75% { transform: translateY(-2px) rotate(8deg); }
+}
+  transform: translateX(-50%);
+  z-index: 996;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 253, 231, 0.05) 26%,
+    rgba(255, 248, 225, 0.3) 33%,
+    rgba(255, 241, 118, 0.90) 39%,
+    rgba(255, 238, 88, 0.98) 43%,
+    rgba(255, 213, 79, 0.82) 47%,
+    rgba(255, 202, 44, 0.72) 51%,
+    rgba(255, 224, 178, 0.01) 63%,
+    transparent 73%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 17%,
+    black 23%,
+    black 37%,
+    transparent 54%
+  );
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 17%,
+    black 21%,
+    black 35%,
+    transparent 53%
+  );
+  box-shadow:
+    0 0 20px rgba(255, 245, 157, 0.4),
+    0 0 60px rgba(255, 236, 179, 0.15);
+  animation: coreDrop 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes coreDrop {
+  0%   { transform: translateX(-50%) translateY(-36%); opacity: 0; }
+  10%  { opacity: 0.3; }
+  18%  { transform: translateX(-50%) translateY(4%); opacity: 0.8; }
+  27%  { transform: translateX(-50%) translateY(9%); opacity: 1; }
+  40%  { transform: translateX(-50%) translateY(12%); }
+  56%  { transform: translateX(-50%) translateY(14%); opacity: 0.85; }
+  74%  { transform: translateX(-50%) translateY(15%); opacity: 0.25; }
+  96%  { transform: translateX(-50%) translateY(16%); opacity: 0.05; }
+  100% { transform: translateX(-50%) translateY(16%); opacity: 0; }
+}
+
+/* ==================== 发射器点击反馈 ==================== */
+
+/* 按压动画：下沉→弹起 */
+.emitter-btn-press {
+  animation: emitterPress 0.25s ease-out;
+}
+
+@keyframes emitterPress {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(0.92); }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* 图标闪烁 */
+.emitter-icon-flash {
+  animation: iconFlash 0.35s ease-out;
+}
+
+@keyframes iconFlash {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(2.5); }
+  100% { filter: brightness(1); }
+}
+
+/* 冷却环指示器 */
+.cooldown-ring-container {
+  position: absolute;
+  inset: 2px;
+  pointer-events: none;
+}
+
+.cooldown-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.cooldown-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 2;
+}
+
+.cooldown-ring-fill {
+  fill: none;
+  stroke: url(#cooldownGradient);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s linear;
+}
+
+/* 冷却中半透明 */
+.emitter-btn.on-cooldown {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 就绪呼吸动画 */
+.emitter-btn-ready {
+  animation: readyBreathe 2s ease-in-out infinite;
+}
+
+@keyframes readyBreathe {
+  0%, 100% { box-shadow: 0 0 4px rgba(76, 175, 80, 0.1); }
+  50%      { box-shadow: 0 0 12px rgba(76, 175, 80, 0.28); }
+}
+
+/* ==================== 元素飞入动画 ==================== */
+.fly-element {
+  position: fixed;
+  z-index: 998;
+  pointer-events: none;
+  font-size: 1.8rem;
+  line-height: 1;
+  will-change: transform, opacity;
+}
+
+.fly-element-trail {
+  position: fixed;
+  z-index: 997;
+  pointer-events: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+/* 消散为光点 */
+.fly-element-dissolve {
+  animation: flyDissolve 0.5s ease-out forwards;
+}
+
+@keyframes flyDissolve {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.1); }
+}
+
+/* ==================== 连击里程碑特效 ==================== */
+
+/* 棋盘边框绿光（5连击） */
+.board-border-glow {
+  animation: borderGlowGreen 0.8s ease-out;
+}
+
+@keyframes borderGlowGreen {
+  0%   { box-shadow: 0 0 0 rgba(76, 175, 80, 0); border-color: transparent; }
+  30%  { box-shadow: 0 0 25px rgba(76, 175, 80, 0.4), inset 0 0 15px rgba(76, 175, 80, 0.08); border-color: #4caf5088; }
+  70%  { box-shadow: 0 0 18px rgba(76, 175, 80, 0.3), inset 0 0 10px rgba(76, 175, 80, 0.05); border-color: #4caf5066; }
+  100% { box-shadow: var(--shadow); border-color: var(--border-color); }
+}
+
+/* 棋盘边框蓝色火焰环绕（10连击） */
+.board-border-flame {
+  animation: borderFlameBlue 3s ease-in-out forwards;
+  position: relative;
+}
+
+@keyframes borderFlameBlue {
+  0%   { box-shadow: 0 0 5px rgba(33, 150, 243, 0.2); border-color: #2196f344; }
+  15%  { box-shadow: 0 0 35px rgba(33, 150, 243, 0.45), inset 0 0 20px rgba(33, 150, 243, 0.06); border-color: #2196f3aa; }
+  50%  { box-shadow: 0 0 40px rgba(33, 150, 243, 0.55), inset 0 0 22px rgba(33, 150, 243, 0.08); border-color: #2196f3cc; }
+  85%  { box-shadow: 0 0 28px rgba(33, 150, 243, 0.35), inset 0 0 14px rgba(33, 150, 243, 0.05); border-color: #2196f388; }
+  100% { box-shadow: var(--shadow); border-color: var(--border-color); }
+}
+
+/* 蓝色火焰粒子容器 */
+.flame-particles-container {
+  position: absolute;
+  inset: -6px;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
+}
+
+.flame-particle {
+  position: absolute;
+  width: 4px;
+  height: 12px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: flameRise 0.8s ease-out forwards;
+}
+
+@keyframes flameRise {
+  0%   { opacity: 0; transform: translateY(0) scale(1); }
+  20%  { opacity: 0.9; }
+  60%  { opacity: 0.6; transform: translateY(-30px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.3); }
+}
+
+/* 棋盘边框闪电特效（20连击） */
+.board-border-lightning {
+  animation: borderLightning 5s ease-in-out forwards;
+}
+
+@keyframes borderLightning {
+  0%   { box-shadow: 0 0 0 rgba(255, 215, 0, 0); border-color: transparent; }
+  8%   { box-shadow: 0 0 50px rgba(255, 215, 0, 0.7), 0 0 100px rgba(255, 152, 0, 0.3), inset 0 0 30px rgba(255, 215, 0, 0.1); border-color: #ffd700ee; }
+  12%  { box-shadow: 0 0 42px rgba(255, 193, 7, 0.65), 0 0 90px rgba(255, 152, 0, 0.25), inset 0 0 26px rgba(255, 215, 0, 0.09); border-color: #ffc107cc; }
+  25%  { box-shadow: 0 0 48px rgba(255, 215, 0, 0.68), 0 0 95px rgba(255, 152, 0, 0.28), inset 0 0 24px rgba(255, 215, 0, 0.07); border-color: #ffd700dd; }
+  50%  { box-shadow: 0 0 36px rgba(255, 152, 0, 0.38), 0 0 75px rgba(255, 152, 0, 0.16), inset 0 0 14px rgba(255, 183, 77, 0.04); border-color: #ff980088; }
+  72%  { box-shadow: 0 0 44px rgba(255, 215, 0, 0.58), 0 0 88px rgba(255, 165, 0, 0.23), inset 0 0 20px rgba(255, 200, 0, 0.06); border-color: #ffd700bb; }
+  86%  { box-shadow: 0 0 32px rgba(255, 180, 0, 0.34), 0 0 62px rgba(255, 160, 0, 0.13), inset 0 0 10px rgba(255, 190, 0, 0.03); border-color: #ffb30077; }
+  96%  { box-shadow: 0 0 46px rgba(255, 220, 0, 0.52), 0 0 82px rgba(255, 170, 0, 0.19), inset 0 0 17px rgba(255, 210, 0, 0.05); border-color: #ffd700aa; }
+  98%  { box-shadow: 0 0 54px rgba(255, 230, 0, 0.56), 0 0 105px rgba(255, 170, 0, 0.21), inset 0 0 27px rgba(255, 210, 0, 0.065); border-color: #ffd700dd; }
+  99%  { box-shadow: 0 0 44px rgba(255, 216, 0, 0.47), 0 0 92px rgba(255, 163, 0, 0.185), inset 0 0 19px rgba(255, 206, 0, 0.045); border-color: #ffd700aa; }
+  100% { box-shadow: var(--shadow); border-color: var(--border-color); }
+}
+
+/* 闪电闪烁闪光 */
+.lightning-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 996;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 235, 59, 0.11), transparent 70%);
+  animation: lightningFlashPulse 5s ease-in-out forwards;
+}
+
+@keyframes lightningFlashPulse {
+  0%, 100% { opacity: 0; }
+  5%  { opacity: 0.25; }
+  10% { opacity: 0; }
+  18% { opacity: 0.2; }
+  22% { opacity: 0; }
+  78% { opacity: 0; }
+  83% { opacity: 0.18; }
+  87% { opacity: 0; }
+  93% { opacity: 0.15; }
+  97% { opacity: 0; }
+}

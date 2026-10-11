@@ -14,7 +14,6 @@
       <span id="current-level" class="level-badge">第 1 关</span>
     </div>
     <div class="header-center">
-      <div id="combo-display" class="combo-display"></div>
     </div>
     <div class="header-right">
       <button id="new-game-btn" class="tool-btn" title="重新开始">🔄 新游戏</button>
@@ -66,6 +65,13 @@
           </div>
         </div>
         <div id="board-boon-area"></div>
+        <!-- 连击显示区 -->
+        <div id="board-combo-area">
+          <div id="board-combo-display" class="board-combo-display" style="display:none;">
+            <span id="board-combo-count-text" class="board-combo-count-text"></span>
+            <span id="board-combo-multiplier-text" class="board-combo-multiplier-text"></span>
+          </div>
+        </div>
       </div>
       <div id="game-board" class="game-board"></div>
     </section>

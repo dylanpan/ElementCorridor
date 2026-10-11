@@ -41,6 +41,12 @@ class GameEngine {
     // 三合一候选（boon_triple_merge）
     this._tripleMergeCandidates = [];
 
+    // 连击超时定时器
+    this._comboTimeoutId = null;
+
+    // 已触发的连击里程碑（用于首次完整效果）
+    this._triggeredMilestones = new Set();
+
     // 绑定事件
     window.eventBus.on('ui:order-clicked', (orderId) => this._onOrderClicked(orderId));
   }
@@ -70,6 +76,12 @@ class GameEngine {
     this.state.isPlaying = true;
     this.state.isPaused = false;
     this.state.levelConfig = levelConfig;
+
+    // 清除连击超时
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+      this._comboTimeoutId = null;
+    }
 
     // 根据节点类型调整难度
     let boardCols = levelConfig.boardCols;
@@ -184,6 +196,12 @@ class GameEngine {
     this.state.isPlaying = true;
     this.state.isPaused = false;
     this.state.levelConfig = levelConfig;
+
+    // 清除连击超时
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+      this._comboTimeoutId = null;
+    }
 
     // 初始化棋盘
     const { boardCols, boardRows } = levelConfig;
@@ -322,7 +340,7 @@ class GameEngine {
       }
     }
 
-    let moved = false;
+    let totalMoved = 0;
 
     // 对每组 >= 2 个的元素，检查是否已有相邻对，没有则尝试聚拢
     for (const key of Object.keys(groups)) {
@@ -347,6 +365,7 @@ class GameEngine {
         const second = positions[1];
 
         const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        let foundSpot = false;
         for (const [dr, dc] of dirs) {
           const nr = first.row + dr;
           const nc = first.col + dc;
@@ -354,16 +373,38 @@ class GameEngine {
             if (this.systems.spawn.moveElement(board, second.element, nr, nc)) {
               this.boardRenderer.updateCell(board, second.row, second.col);
               this.boardRenderer.updateCell(board, nr, nc);
-              moved = true;
+              totalMoved++;
+              foundSpot = true;
             }
             break;
+          }
+        }
+
+        // 如果第一个元素周围没有空位，尝试反过来：把第一个元素移到第二个元素旁边
+        if (!foundSpot) {
+          for (const [dr, dc] of dirs) {
+            const nr = second.row + dr;
+            const nc = second.col + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !board[nr][nc]) {
+              if (this.systems.spawn.moveElement(board, first.element, nr, nc)) {
+                this.boardRenderer.updateCell(board, first.row, first.col);
+                this.boardRenderer.updateCell(board, nr, nc);
+                totalMoved++;
+              }
+              break;
+            }
           }
         }
       }
     }
 
-    if (moved) {
+    if (totalMoved > 0) {
       this.boardRenderer.renderAll(board);
+      // 通知用户自动整理结果
+      window.eventBus.emit('notification', {
+        message: `🧹 自动整理了 ${totalMoved} 个元素`,
+        type: 'info',
+      });
     }
   }
 
@@ -432,6 +473,8 @@ class GameEngine {
 
     // 更新发射器UI
     window.eventBus.emit('emitters:updated', this.state.emitters);
+    // 发射器点击反馈
+    window.eventBus.emit('emitter:clicked', { emitterId: emitterId });
   }
 
   /** 点击棋盘格子 */
@@ -573,6 +616,8 @@ class GameEngine {
     }
     this.boardRenderer.updateCell(this.state.board, thirdRow, thirdCol);
     this.boardRenderer.playMergeAnimation(candidates[0].row, candidates[0].col, thirdRow, thirdCol);
+    // 播放合成特效（粒子爆散 + 等级触发特效）
+    this.boardRenderer.playMergeEffect(thirdRow, thirdCol, merged.level, merged.typeId || merged.elementType);
 
     // 清除三合一状态
     this._tripleMergeCandidates = [];
@@ -636,6 +681,8 @@ class GameEngine {
     this.boardRenderer.updateCell(this.state.board, fromPos.row, fromPos.col);
     this.boardRenderer.updateCell(this.state.board, toPos.row, toPos.col);
     this.boardRenderer.playMergeAnimation(fromPos.row, fromPos.col, toPos.row, toPos.col);
+    // 播放合成特效（粒子爆散 + 等级触发特效）
+    this.boardRenderer.playMergeEffect(toPos.row, toPos.col, merged.level, merged.typeId || merged.elementType);
     this.boardRenderer.deselectCell();
 
     // 更新连击显示
@@ -643,6 +690,19 @@ class GameEngine {
       count: comboCount,
       multiplier: comboMultiplier,
     });
+
+    // 检查连击里程碑（5/10/20连击）
+    this._checkComboMilestone(comboCount);
+
+    // 设置连击超时：若 COMBO_WINDOW_MS 内无新合成，触发 Combo Break
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+    }
+    this._comboTimeoutId = setTimeout(() => {
+      this._comboTimeoutId = null;
+      this.systems.merge.resetCombo();
+      window.eventBus.emit('combo:break', {});
+    }, this.systems.merge.COMBO_WINDOW_MS);
 
     // 通知合成事件
     window.eventBus.emit('notification', {
@@ -683,10 +743,31 @@ class GameEngine {
     }
   }
 
+  /** 检查连击里程碑：5/10/20连击 */
+  _checkComboMilestone(comboCount) {
+    const milestones = [5, 10, 20];
+    for (const ms of milestones) {
+      if (comboCount === ms) {
+        const isFirstTime = !this._triggeredMilestones.has(ms);
+        if (isFirstTime) {
+          this._triggeredMilestones.add(ms);
+        }
+        window.eventBus.emit('combo:milestone', { milestone: ms, isFirstTime });
+        break;
+      }
+    }
+  }
+
   /** 触发元素共鸣：临时提升棋盘上所有同类型元素的视觉等级 */
   _triggerElementResonance(merged) {
     const typeId = merged.typeId || merged.elementType;
     const resonatingCells = [];
+
+    // 清除之前的共鸣定时器（连续合成时重置计时）
+    if (this._resonanceTimer) {
+      clearTimeout(this._resonanceTimer);
+      this._resonanceTimer = null;
+    }
 
     // 扫描棋盘上所有同类型元素
     for (let r = 0; r < this.state.board.length; r++) {
@@ -694,26 +775,35 @@ class GameEngine {
         const el = this.state.board[r][c];
         if (el && (el.typeId === typeId || el.elementType === typeId)) {
           resonatingCells.push({ row: r, col: c });
+          // 标记临时等级加成
+          el._resonanceBoost = true;
         }
       }
     }
 
     if (resonatingCells.length === 0) return;
 
-    // 设置视觉高亮
-    this.boardRenderer.setResonating(resonatingCells);
+    // 刷新所有受影响格子，显示升级后的外观
+    for (const { row, col } of resonatingCells) {
+      this.boardRenderer.updateCell(this.state.board, row, col);
+    }
 
     window.eventBus.emit('notification', {
       message: `🌈 元素共鸣！${merged.icon} ${merged.name} 的力量在棋盘上回荡`,
       type: 'merge',
     });
 
-    // 5秒后清除共鸣效果
-    setTimeout(() => {
-      this.boardRenderer.clearResonating();
-      // 刷新所有受影响的格子，移除视觉样式
-      for (const { row, col } of resonatingCells) {
-        this.boardRenderer.updateCell(this.state.board, row, col);
+    // 5秒后清除共鸣效果（每次重新计时）
+    this._resonanceTimer = setTimeout(() => {
+      this._resonanceTimer = null;
+      for (let r = 0; r < this.state.board.length; r++) {
+        for (let c = 0; c < this.state.board[r].length; c++) {
+          const el = this.state.board[r][c];
+          if (el && el._resonanceBoost) {
+            delete el._resonanceBoost;
+            this.boardRenderer.updateCell(this.state.board, r, c);
+          }
+        }
       }
     }, 5000);
   }
@@ -745,6 +835,16 @@ class GameEngine {
   /** 点击订单 */
   _onOrderClicked(orderId) {
     if (!this.state.isPlaying || this.state.isPaused) return;
+
+    // 提交前记录所有非空格子位置（用于后续飞入动画定位）
+    const beforeSnapshot = [];
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        if (this.state.board[r][c]) {
+          beforeSnapshot.push({ row: r, col: c });
+        }
+      }
+    }
 
     const result = this.systems.order.submitOrder(
       orderId, this.state.board, this.systems.spawn
@@ -779,6 +879,24 @@ class GameEngine {
     // === 肉鸽诅咒：贪婪代价 ===
     if (this.boonSystem && this.boonSystem.hasCurse('curse_greed_price')) {
       this._consumeRandomElement();
+    }
+
+    // 找出被消耗元素的位置（对比快照中哪些格子变空了）
+    const consumedPositions = [];
+    const elementIcon = result.element ? (result.element.icon || '✦') : '✦';
+    for (const { row, col } of beforeSnapshot) {
+      if (!this.state.board[row][col]) {
+        consumedPositions.push({ row, col });
+      }
+    }
+
+    // 触发元素飞入动画
+    if (consumedPositions.length > 0) {
+      window.eventBus.emit('elements:fly-to-order', {
+        orderId: orderId,
+        positions: consumedPositions,
+        elementIcon: elementIcon,
+      });
     }
 
     // 更新UI
@@ -941,6 +1059,11 @@ class GameEngine {
     this._stopGameLoop();
     this._stopAutoSave();
     this._stopAutoSort();
+    // 清除连击超时
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+      this._comboTimeoutId = null;
+    }
     this.state.isPlaying = false;
   }
 }
