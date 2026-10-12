@@ -66,6 +66,7 @@
       <button class="debug-tab active" data-tab="boons">✨ 祝福 (${BOON_POOL.length})</button>
       <button class="debug-tab" data-tab="curses">💀 诅咒 (${CURSE_POOL.length})</button>
       <button class="debug-tab" data-tab="events">⚡ 紧急事件 (${EMERGENCY_EVENTS.length})</button>
+      <button class="debug-tab" data-tab="ultimates">🔥 大招</button>
     `;
 
     // 内容区
@@ -104,6 +105,45 @@
       filterItems(container, searchBox.value);
     });
     container.appendChild(searchBox);
+
+    // 大招页签：添加怒气值控制区域
+    if (tab === 'ultimates') {
+      const rageControl = document.createElement('div');
+      rageControl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;margin:4px 0 8px;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);border-radius:8px;';
+      rageControl.innerHTML = `
+        <span style="font-size:14px;color:#ff9800;white-space:nowrap;">⚡ 怒气值</span>
+        <input id="debug-rage-input" type="number" min="1" max="100" value="20"
+          style="flex:1;min-width:50px;padding:4px 6px;border:1px solid #555;border-radius:4px;background:#2a2a2a;color:#fff;font-size:13px;">
+        <button id="debug-rage-add-btn" style="padding:4px 12px;border:none;border-radius:4px;background:linear-gradient(135deg,#ff9800,#f57c00);color:#fff;cursor:pointer;font-size:13px;font-weight:bold;">+ 增加</button>
+        <button id="debug-rage-max-btn" style="padding:4px 12px;border:none;border-radius:4px;background:rgba(255,152,0,0.3);color:#ff9800;cursor:pointer;font-size:12px;">满怒</button>
+      `;
+      container.appendChild(rageControl);
+
+      // 延迟绑定事件（确保 DOM 已渲染）
+      setTimeout(() => {
+        const input = document.getElementById('debug-rage-input');
+        const addBtn = document.getElementById('debug-rage-add-btn');
+        const maxBtn = document.getElementById('debug-rage-max-btn');
+        if (addBtn && input) {
+          addBtn.addEventListener('click', () => {
+            const ge = window.__gameEngine;
+            if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+            const amount = parseInt(input.value) || 20;
+            ge._addRage(amount);
+          });
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addBtn.click();
+          });
+        }
+        if (maxBtn) {
+          maxBtn.addEventListener('click', () => {
+            const ge = window.__gameEngine;
+            if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+            ge._addRage(100);
+          });
+        }
+      }, 50);
+    }
 
     const list = document.createElement('div');
     list.className = 'debug-list';
@@ -144,6 +184,24 @@
         data: e,
         type: 'event',
       }));
+    } else if (tab === 'ultimates') {
+      // 从游戏引擎获取全部大招池
+      const ge = window.__gameEngine;
+      let ultimates = [];
+      if (ge && ge._ultimates) {
+        ultimates = ge._ultimates;
+      }
+      items = ultimates.map((u) => ({
+        id: u.id,
+        icon: u.icon,
+        name: u.name,
+        desc: u.desc,
+        rageCost: u.rageCost,
+        cooldown: (u.cooldown / 1000).toFixed(0),
+        unlockBoon: u.unlockBoon || null,
+        isBase: !u.unlockBoon,
+        type: 'ultimate',
+      }));
     }
 
     items.forEach((item) => {
@@ -162,6 +220,7 @@
       let catLabel = item.category;
       if (item.type === 'curse') catLabel = '诅咒';
       else if (item.type === 'event') catLabel = item.category === 'positive' ? '增益' : item.category === 'negative' ? '负面' : item.category === 'challenge' ? '挑战' : '随机';
+      else if (item.type === 'ultimate') catLabel = '大招';
 
       // 额外信息
       let extraInfo = '';
@@ -170,6 +229,23 @@
       }
       if (item.compensation) {
         extraInfo = `<span class="debug-extra">补偿: ${item.compensation}</span>`;
+      }
+      if (item.type === 'ultimate') {
+        if (item.isBase) {
+          extraInfo = `
+            <span class="debug-extra">⚡ ${item.rageCost} 怒气</span>
+            <span class="debug-extra">⏱ 冷却 ${item.cooldown}s</span>
+            <span class="debug-extra">✅ 基础大招（默认可用）</span>
+          `;
+        } else {
+          const hasBoon = window.__boonSystem && window.__boonSystem.hasBoon(item.unlockBoon);
+          const statusIcon = hasBoon ? '✅' : '🔒';
+          extraInfo = `
+            <span class="debug-extra">⚡ ${item.rageCost} 怒气</span>
+            <span class="debug-extra">⏱ 冷却 ${item.cooldown}s</span>
+            <span class="debug-extra">${statusIcon} 需要祝福解锁</span>
+          `;
+        }
       }
 
       el.innerHTML = `
@@ -183,13 +259,41 @@
           <div class="debug-item-desc">${item.desc}</div>
           ${extraInfo ? `<div class="debug-item-extra">${extraInfo}</div>` : ''}
         </div>
-        <button class="debug-add-btn" data-type="${item.type}" data-id="${item.id}">+ 添加</button>
+        ${item.type === 'ultimate' && !item.isBase
+          ? `<button class="debug-add-btn debug-add-boon-btn" data-type="add_boon" data-id="${item.unlockBoon}" title="添加对应祝福">+ 祝福</button>`
+          : item.type === 'ultimate' && item.isBase
+          ? `<button class="debug-add-btn" disabled style="opacity:0.5;cursor:default;">默认可用</button>`
+          : `<button class="debug-add-btn" data-type="${item.type}" data-id="${item.id}">+ 添加</button>`
+        }
       `;
 
-      el.querySelector('.debug-add-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        applyItem(item);
-      });
+      // 大招页签的按钮：点击添加对应祝福
+      if (item.type === 'ultimate' && !item.isBase) {
+        el.querySelector('.debug-add-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          // 查找 BOON_POOL 中对应的祝福
+          const boon = BOON_POOL.find((b) => b.id === item.unlockBoon);
+          if (boon) {
+            applyItem({
+              type: 'boon',
+              id: boon.id,
+              icon: boon.icon,
+              name: boon.name,
+              desc: boon.description,
+              rarity: boon.rarity,
+              category: boon.category,
+              data: boon,
+            });
+          } else {
+            alert(`祝福「${item.unlockBoon}」未在 BOON_POOL 中找到，请先在配置中添加`);
+          }
+        });
+      } else {
+        el.querySelector('.debug-add-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyItem(item);
+        });
+      }
 
       list.appendChild(el);
     });

@@ -46,6 +46,7 @@
 
     // 暴露全局引用供调试工具使用
     window.__gameEngine = gameEngine;
+    window.gameEngine = gameEngine;
     window.__boonSystem = boonSystem;
 
   // 设置按钮事件
@@ -471,12 +472,61 @@
       const curses = boonSystem.getCurseSummary();
       let html = '';
       for (const b of boons) {
-        html += `<span class="rogue-boon-icon rogue-boon-${b.rarity}" data-tooltip="${b.name}: ${b.description}">${b.icon}</span>`;
+        html += `<span class="rogue-boon-icon rogue-boon-${b.rarity}">
+          ${b.icon}
+          <div class="rogue-item-tooltip">
+            <div class="rogue-tooltip-name">${b.icon} ${b.name}</div>
+            <div class="rogue-tooltip-desc">${b.description || ''}</div>
+          </div>
+        </span>`;
       }
       for (const c of curses) {
-        html += `<span class="rogue-curse-icon" data-tooltip="诅咒: ${c.name}">${c.icon}</span>`;
+        const stageText = (c.currentStage != null && c.totalStages != null)
+          ? `<div class="rogue-tooltip-stage">阶段 ${c.currentStage}/${c.totalStages}</div>`
+          : '';
+        const compText = c.compensation ? `<div class="rogue-tooltip-comp">补偿：${c.compensation}</div>` : '';
+        html += `<span class="rogue-curse-icon">
+          ${c.icon}
+          <div class="rogue-item-tooltip">
+            <div class="rogue-tooltip-name">${c.icon} ${c.name}</div>
+            ${stageText}
+            <div class="rogue-tooltip-desc">${c.description || '暂无描述'}</div>
+            ${compText}
+          </div>
+        </span>`;
       }
       boardBoonArea.innerHTML = html;
+
+      // 为每个图标绑定 mouseenter/mouseleave，动态检测 tooltip 是否超出视口
+      boardBoonArea.querySelectorAll('.rogue-boon-icon, .rogue-curse-icon').forEach(el => {
+        el.addEventListener('mouseenter', function() {
+          const tip = this.querySelector('.rogue-item-tooltip');
+          if (!tip) return;
+
+          // 重置方向（恢复 CSS 默认的向下弹出）
+          tip.style.top = '';
+          tip.style.bottom = '';
+          // 不设置 display:block——由 CSS :hover 控制显示
+
+          // 下一帧检测位置，避免闪烁
+          requestAnimationFrame(() => {
+            const rect = tip.getBoundingClientRect();
+            if (rect.bottom > window.innerHeight) {
+              // 超出视口底部 → 改为向上弹出
+              tip.style.top = 'auto';
+              tip.style.bottom = 'calc(100% + 6px)';
+            }
+          });
+        });
+
+        el.addEventListener('mouseleave', function() {
+          const tip = this.querySelector('.rogue-item-tooltip');
+          if (!tip) return;
+          // 清除所有内联样式，恢复 CSS 控制
+          tip.style.bottom = '';
+          tip.style.top = '';
+        });
+      });
     }
   }
 

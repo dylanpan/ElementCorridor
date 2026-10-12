@@ -840,20 +840,66 @@ body {
   z-index: 10;
 }
 
-.rogue-boon-icon:hover::after {
-  content: attr(data-tooltip);
+/* 祝福/诅咒通用 tooltip 弹出框 */
+.rogue-boon-icon .rogue-item-tooltip,
+.rogue-curse-icon .rogue-item-tooltip {
+  display: none;
   position: absolute;
-  bottom: 100%;
+  top: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.9);
-  color: #fff;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  white-space: nowrap;
-  z-index: 999;
+  min-width: 200px;
+  max-width: 260px;
+  background: rgba(15, 15, 25, 0.96);
+  border-radius: 8px;
+  padding: 8px 12px;
+  z-index: 10000;
   pointer-events: none;
+  white-space: normal;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.rogue-boon-icon:hover .rogue-item-tooltip,
+.rogue-curse-icon:hover .rogue-item-tooltip {
+  display: block;
+}
+.rogue-boon-icon .rogue-item-tooltip {
+  border: 1px solid rgba(255, 215, 0, 0.35);
+}
+.rogue-curse-icon .rogue-item-tooltip {
+  border: 1px solid rgba(244, 67, 54, 0.45);
+}
+
+.rogue-tooltip-name {
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+.rogue-boon-icon .rogue-tooltip-name {
+  color: #ffd700;
+}
+.rogue-curse-icon .rogue-tooltip-name {
+  color: #ff6b6b;
+}
+
+.rogue-tooltip-stage {
+  font-size: 11px;
+  color: #ff9800;
+  margin-bottom: 3px;
+}
+
+.rogue-tooltip-desc {
+  font-size: 12px;
+  color: #ddd;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.rogue-tooltip-comp {
+  font-size: 11px;
+  color: #81c784;
+  margin-top: 3px;
+  white-space: normal;
 }
 
 .rogue-boon-common { background: rgba(158,158,158,0.25); border: 1.5px solid #9e9e9e88; }
@@ -894,23 +940,6 @@ body {
   z-index: 10;
   border-color: #f44336cc;
   box-shadow: 0 0 10px rgba(244,67,54,0.35), inset 0 0 8px rgba(244,67,54,0.1);
-}
-
-.rogue-curse-icon:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(40,0,0,0.95);
-  color: #ff8a80;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  white-space: nowrap;
-  z-index: 999;
-  pointer-events: none;
-  border: 1px solid #f4433666;
 }
 
 /* 菜单按钮悬停效果 */
@@ -1242,6 +1271,7 @@ body {
   25% { transform: translateY(-3px) rotate(-8deg); }
   75% { transform: translateY(-2px) rotate(8deg); }
 }
+.core-drop-element {
   transform: translateX(-50%);
   z-index: 996;
   pointer-events: none;
@@ -2618,4 +2648,601 @@ body {
   border-color: rgba(76, 175, 80, 0.55);
   color: #a5d6a7;
   box-shadow: 0 0 8px rgba(76, 175, 80, 0.2);
+}
+
+/* ==================== 怒气条系统 ==================== */
+#rage-bar-container {
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 90;
+  pointer-events: auto;
+}
+
+.rage-bar-title {
+  font-size: 11px;
+  color: #ff9800;
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(255, 152, 0, 0.4);
+  letter-spacing: 1px;
+}
+
+.rage-bar-track {
+  width: 18px;
+  height: 180px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  backdrop-filter: blur(4px);
+}
+
+.rage-bar-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 0 0 9px 9px;
+  transition: height 0.3s ease, background 0.5s ease;
+  min-height: 2px;
+}
+
+.rage-bar-pulsing {
+  animation: ragePulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes ragePulse {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.5); box-shadow: 0 0 12px rgba(255, 215, 0, 0.6); }
+}
+
+.rage-value-display {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+  min-width: 24px;
+  text-align: center;
+}
+
+.ultimate-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 152, 0, 0.4);
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  position: relative;
+}
+.ultimate-btn:hover {
+  border-color: #ff9800;
+  background: rgba(255, 152, 0, 0.25);
+  transform: scale(1.1);
+  box-shadow: 0 0 14px rgba(255, 152, 0, 0.3);
+}
+.ultimate-btn-ready {
+  border-color: #ffd700;
+  background: rgba(255, 215, 0, 0.2);
+  animation: ultBtnGlow 1s ease-in-out infinite alternate;
+}
+@keyframes ultBtnGlow {
+  0% { box-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
+  100% { box-shadow: 0 0 22px rgba(255, 215, 0, 0.7); }
+}
+
+/* ==================== 大招选择面板 ==================== */
+#ultimate-panel {
+  position: fixed;
+  right: 70px;
+  top: 50%;
+  transform: translateY(-50%) translateX(20px);
+  width: 280px;
+  max-height: 420px;
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  z-index: 95;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 152, 0, 0.1);
+  overflow: hidden;
+}
+#ultimate-panel.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+#ultimate-panel.hide {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(20px);
+  transition: all 0.2s ease;
+}
+
+.ultimate-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.15), rgba(156, 39, 176, 0.1));
+  border-bottom: 1px solid rgba(255, 152, 0, 0.2);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffd700;
+}
+.ultimate-panel-close {
+  cursor: pointer;
+  font-size: 16px;
+  color: #888;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.ultimate-panel-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ultimate-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ultimate-list::-webkit-scrollbar {
+  width: 4px;
+}
+.ultimate-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 152, 0, 0.3);
+  border-radius: 2px;
+}
+
+.ultimate-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.ultimate-card:hover {
+  background: rgba(255, 152, 0, 0.12);
+  border-color: rgba(255, 152, 0, 0.3);
+  transform: translateX(3px);
+}
+.ultimate-card-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ultimate-card-locked:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: none;
+}
+.ultimate-card-no-rage {
+  opacity: 0.65;
+}
+.ultimate-card-no-rage:hover {
+  background: rgba(244, 67, 54, 0.1);
+  border-color: rgba(244, 67, 54, 0.25);
+}
+
+.ultimate-card-icon {
+  font-size: 24px;
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.ultimate-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.ultimate-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #eee;
+}
+.ultimate-card-desc {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.ultimate-card-cost {
+  font-size: 11px;
+  color: #ff9800;
+  margin-top: 3px;
+  font-weight: 500;
+}
+
+/* ==================== 大招冷却进度条（整个卡片背景） ==================== */
+.ultimate-cooldown-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.ultimate-cooldown-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ef5350, #ff7043);
+  border-radius: 10px;
+  transition: width 0.15s linear;
+  opacity: 0.35;
+}
+.ultimate-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 68px;
+  padding: 12px 14px;
+}
+.ultimate-card-icon,
+.ultimate-card-info {
+  position: relative;
+  z-index: 1;
+}
+.ultimate-card-on-cd {
+  cursor: not-allowed !important;
+}
+.ultimate-card-on-cd:hover {
+  transform: none !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ==================== 大招释放全屏文字特效 ==================== */
+.ultimate-text-effect {
+  position: fixed;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -60%) scale(0.6);
+  font-size: 42px;
+  font-weight: 800;
+  color: #ffd700;
+  text-shadow:
+    0 0 20px rgba(255, 215, 0, 0.6),
+    0 0 60px rgba(255, 152, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+  letter-spacing: 4px;
+  transition: all 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ultimate-text-effect.show {
+  opacity: 1;
+  transform: translate(-50%, -55%) scale(1);
+}
+.ultimate-text-effect.hide {
+  opacity: 0;
+  transform: translate(-50%, -75%) scale(1.3);
+  transition: all 0.5s ease;
+}
+
+/* ==================== 积分增幅横幅 ==================== */
+.score-boost-banner {
+  position: fixed;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  font-size: 48px;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.5), 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 150;
+  pointer-events: none;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.score-boost-banner.show {
+  opacity: 1;
+  transform: translate(-50%, -52%) scale(1);
+}
+.score-boost-banner.hide {
+  opacity: 0;
+  transform: translate(-50%, -68%) scale(1.2);
+  transition: all 0.4s ease;
+}
+.combo-boost {
+  color: #00e5ff;
+  text-shadow: 0 0 30px rgba(0, 229, 255, 0.5), 0 4px 12px rgba(0,0,0,0.5);
+}
+
+/* ==================== 诅咒系统样式 ==================== */
+
+/* 诅咒升级暗红色闪烁 */
+.curse-upgrade-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(140, 0, 0, 0.35) 90%, rgba(160, 20, 20, 0.5) 96%, rgba(200, 30, 30, 0.6) 100%);
+  transition: opacity 0.15s ease;
+}
+.curse-upgrade-flash.show {
+  opacity: 1;
+}
+
+/* ==================== Boss 战样式 ==================== */
+
+/* Boss HUD - 屏幕顶部中央 */
+.boss-hud {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(40, 10, 10, 0.9), rgba(60, 15, 15, 0.85));
+  border: 2px solid rgba(255, 60, 60, 0.5);
+  border-radius: 12px;
+  padding: 6px 18px 6px 14px;
+  z-index: 995;
+  opacity: 0;
+  transition: all 0.4s ease;
+  pointer-events: none;
+  box-shadow: 0 0 30px rgba(200, 30, 30, 0.25);
+}
+.boss-hud-enter {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.boss-hud-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.boss-hud-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #ff6b6b;
+  text-shadow: 0 0 12px rgba(255, 80, 80, 0.5);
+}
+.boss-hud-desc {
+  font-size: 11px;
+  color: #cc9999;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Boss 愤怒状态 */
+.boss-hud-rage {
+  border-color: rgba(255, 150, 0, 0.7);
+  animation: bossRagePulse 0.8s ease-in-out infinite;
+  box-shadow: 0 0 45px rgba(255, 100, 0, 0.35);
+}
+@keyframes bossRagePulse {
+  0%, 100% { box-shadow: 0 0 30px rgba(255, 70, 0, 0.3); }
+  33% { box-shadow: 0 0 55px rgba(255, 120, 0, 0.5); }
+  66% { box-shadow: 0 0 65px rgba(255, 180, 0, 0.6); }
+}
+
+/* Boss 胜利 */
+.boss-hud-victory {
+  border-color: rgba(255, 215, 0, 0.8);
+  background: linear-gradient(135deg, rgba(120, 90, 0, 0.95), rgba(160, 110, 0, 0.9));
+  transition: all 1s ease;
+}
+
+/* 愤怒脉冲（屏幕边缘） */
+.boss-rage-pulse {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 997;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 75%, rgba(140, 30, 0, 0.3) 92%, rgba(220, 60, 0, 0.5) 98%, rgba(240, 80, 0, 0.6) 100%);
+  transition: opacity 0.2s ease;
+}
+.boss-rage-pulse.show {
+  opacity: 1;
+}
+
+/* 灼烧格子 */
+.cell-scorched {
+  background: radial-gradient(circle, rgba(255, 69, 0, 0.05) 0%, rgba(139, 34, 34, 0.08) 51%, rgba(178, 68, 23, 0.06) 99%);
+  box-shadow: inset 0 0 18px rgba(230, 76, 22, 0.42), 0 0 10px rgba(210, 56, 13, 0.38);
+  animation: scorchFlicker 0.5s ease-in-out infinite alternate;
+}
+@keyframes scorchFlicker {
+  0% { box-shadow: inset 0 0 12px rgba(250, 86, 32, 0.36), 0 0 8px rgba(232, 62, 19, 0.31); }
+  100% { box-shadow: inset 0 0 24px rgba(245, 96, 44, 0.52), 0 0 16px rgba(225, 72, 27, 0.46); }
+}
+
+/* 冻结行格子 */
+.cell-frozen {
+  background: radial-gradient(circle, rgba(173, 216, 253, 0.07) 21%, rgba(138, 192, 242, 0.09) 59%, rgba(108, 166, 228, 0.04) 89%);
+  box-shadow: inset 0 0 14px rgba(130, 190, 252, 0.48), 0 0 8px rgba(115, 175, 238, 0.39);
+  animation: freezeGlow 1.2s ease-in-out infinite alternate;
+}
+@keyframes freezeGlow {
+  0% { box-shadow: inset 0 0 10px rgba(145, 198, 248, 0.41), 0 0 6px rgba(128, 182, 234, 0.33); }
+  100% { box-shadow: inset 0 0 20px rgba(165, 215, 254, 0.57), 0 0 14px rgba(148, 202, 244, 0.49); }
+}
+
+/* 暴风雪覆盖层 */
+.blizzard-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 996;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(148, 188, 236, 0.17) 82%, rgba(168, 206, 246, 0.26) 94%, rgba(196, 222, 250, 0.37) 101%);
+  transition: opacity 0.4s ease;
+}
+.blizzard-overlay.show {
+  opacity: 1;
+}
+
+/* 混沌波动闪烁 */
+.chaos-wave-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 996;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 63%, rgba(106, 29, 158, 0.21) 87%, rgba(156, 43, 233, 0.35) 97%, rgba(186, 53, 249, 0.47) 102%);
+  transition: opacity 0.15s ease;
+}
+.chaos-wave-flash.show {
+  opacity: 1;
+}
+
+/* 混沌元素格子 */
+.cell-chaos {
+  animation: chaosGlow 0.4s ease-in-out 3;
+}
+@keyframes chaosGlow {
+  0%, 100% { box-shadow: 0 0 6px rgba(147, 54, 209, 0.4); }
+  50% { box-shadow: 0 0 22px rgba(177, 74, 239, 0.67), 0 0 36px rgba(207, 104, 251, 0.35); }
+}
+
+/* 吞噬倒计时 */
+.devour-timer {
+  position: fixed;
+  top: 64px;
+  right: 84px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffaa00;
+  text-shadow: 0 0 16px rgba(255, 170, 0, 0.4), 0 2px 8px rgba(0,0,0,0.6);
+  z-index: 995;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
+}
+.devour-timer-warning {
+  color: #ff6600;
+  animation: timerWarningPulse 1s ease-in-out infinite;
+}
+@keyframes timerWarningPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.devour-timer-critical {
+  color: #ff2200;
+  animation: timerCriticalPulse 0.5s ease-in-out infinite;
+}
+@keyframes timerCriticalPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+.devour-delayed {
+  color: #00ff88 !important;
+  animation: delayFlash 0.3s ease-out 3;
+}
+@keyframes delayFlash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* 被吞噬列 */
+.cell-devoured {
+  animation: devourVanish 0.6s ease-out forwards;
+}
+@keyframes devourVanish {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); filter: blur(2px); }
+  100% { opacity: 0; transform: scale(0); }
+}
+
+/* 镜像格子 */
+.cell-mirror {
+  animation: mirrorShimmer 0.5s ease-in-out 4;
+}
+@keyframes mirrorShimmer {
+  0%, 100% { box-shadow: 0 0 8px rgba(212, 172, 61, 0.45); }
+  50% { box-shadow: 0 0 28px rgba(247, 208, 83, 0.71), 0 0 44px rgba(237, 195, 70, 0.38); }
+}
+
+/* 祝福解封闪光 */
+.boon-unseal-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 996;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 73%, rgba(241, 214, 78, 0.22) 91%, rgba(243, 218, 93, 0.37) 98%, rgba(235, 205, 68, 0.48) 103%);
+  transition: opacity 0.2s ease;
+}
+.boon-unseal-flash.show {
+  opacity: 1;
+}
+
+/* Boss 胜利特效 */
+.boss-victory-effect {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(211, 181, 48, 0.02) 00%, rgba(231, 201, 77, 0.08) 03%, rgba(221, 191, 79, 0.01) 81%, rgba(219, 189, 68, 0.001) 105%);
+  transition: opacity 0.6s ease;
+}
+.boss-victory-effect.show {
+  opacity: 1;
+}
+
+/* Boss 失败特效 */
+.boss-defeated-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 63%, rgba(107, 107, 109, 0.26) 89%, rgba(136, 136, 141, 0.39) 97%, rgba(155, 155, 161, 0.51) 103%);
+  transition: opacity 0.2s ease;
+}
+.boss-defeated-flash.show {
+  opacity: 1;
+}
+
+/* Boss 粒子特效 */
+.boss-particle {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0;
+}
+.boss-particle.show {
+  animation: particleFly 0.6s ease-out forwards;
+}
+@keyframes particleFly {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--dr)) scale(0.2); }
 }

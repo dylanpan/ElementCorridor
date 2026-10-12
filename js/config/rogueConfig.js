@@ -271,6 +271,58 @@ const BOON_POOL = [
     flavor: '"绝境中的希望"',
     apply: () => {}, // ⏳ 待补充——棋盘满时自动销毁最低级元素腾出空位（每关 3 次），在 SpawnSystem.placeElement 中检测
   },
+
+  // ---- 大招类祝福（解锁对应怒气大招） ----
+  {
+    id: 'boon_rage_merge_up',
+    name: '怒气·全体升级',
+    icon: '⬆',
+    rarity: 'epic',
+    category: 'board',
+    description: '解锁怒气大招「全体升级」：棋盘上所有元素等级+1',
+    flavor: '"集体的力量"',
+    apply: () => {},
+  },
+  {
+    id: 'boon_rage_fill',
+    name: '怒气·元素填充',
+    icon: '🧩',
+    rarity: 'rare',
+    category: 'board',
+    description: '解锁怒气大招「元素填充」：在空位随机生成基础元素',
+    flavor: '"无中生有"',
+    apply: () => {},
+  },
+  {
+    id: 'boon_rage_combo',
+    name: '怒气·连击风暴',
+    icon: '🌀',
+    rarity: 'epic',
+    category: 'merge',
+    description: '解锁怒气大招「连击风暴」：15秒内连击倍率固定 x3',
+    flavor: '"风暴将至"',
+    apply: () => {},
+  },
+  {
+    id: 'boon_rage_order',
+    name: '怒气·订单重置',
+    icon: '📋',
+    rarity: 'rare',
+    category: 'order',
+    description: '解锁怒气大招「订单重置」：刷新所有订单为高奖励订单',
+    flavor: '"商机无限"',
+    apply: () => {},
+  },
+  {
+    id: 'boon_rage_super',
+    name: '怒气·超级合成',
+    icon: '🔮',
+    rarity: 'legendary',
+    category: 'merge',
+    description: '解锁怒气大招「超级合成」：随机将一对相邻同等级元素合成高两级',
+    flavor: '"化不可能为可能"',
+    apply: () => {},
+  },
 ];
 
 // ==================== 诅咒池 ====================
@@ -285,6 +337,20 @@ const CURSE_POOL = [
     },
     compensation: '订单积分 +60%',
     compensator: () => {}, // ✅ 已在 BoonSystem.getOrderRewardMultiplier() 中处理——订单积分 +60%
+    /** 分阶段升级配置 */
+    stageConfigs: [
+      { stage: 1, triggerFloor: 1, desc: '所有发射器冷却时间 +20%', apply: (emitters) => {
+        emitters.forEach(e => { e.modifiers.cooldownMultiplier *= 1.2; });
+      }},
+      { stage: 2, triggerFloor: 3, desc: '冷却惩罚升至 +40%', apply: (emitters) => {
+        emitters.forEach(e => { e.modifiers.cooldownMultiplier /= 1.2; });
+        emitters.forEach(e => { e.modifiers.cooldownMultiplier *= 1.4; });
+      }},
+      { stage: 3, triggerFloor: 6, desc: '冷却惩罚升至 +60%，每提交5个订单额外+5%（永久）', apply: (emitters) => {
+        emitters.forEach(e => { e.modifiers.cooldownMultiplier /= 1.4; });
+        emitters.forEach(e => { e.modifiers.cooldownMultiplier *= 1.6; });
+      }, extraEffect: 'permanentGrowth' },
+    ],
   },
   {
     id: 'curse_element_confusion',
@@ -297,6 +363,12 @@ const CURSE_POOL = [
     },
     compensation: '棋盘扩大 2 格',
     compensator: () => {}, // ⏳ 待补充——在 startRogueLevel 中 boardCols + 2（或 boardRows + 1）
+    /** 分阶段升级配置 */
+    stageConfigs: [
+      { stage: 1, triggerFloor: 1, desc: '发射器有 30% 概率产出随机类型元素', randomChance: 0.3 },
+      { stage: 2, triggerFloor: 4, desc: '随机产出概率升至 60%', randomChance: 0.6 },
+      { stage: 3, triggerFloor: 8, desc: '100% 随机产出，每关开始随机交换棋盘上 3 对元素位置', randomChance: 1.0, extraEffect: 'swapElements' },
+    ],
   },
   {
     id: 'curse_greed_price',
@@ -306,6 +378,12 @@ const CURSE_POOL = [
     penalty: () => {}, // ⏳ 待补充——在 _onOrderClicked 中，提交订单后消耗一个随机元素
     compensation: '订单积分翻倍',
     compensator: () => {}, // ✅ 已在 BoonSystem.getOrderRewardMultiplier() 中处理——订单积分翻倍
+    /** 分阶段升级配置 */
+    stageConfigs: [
+      { stage: 1, triggerFloor: 1, desc: '每提交 3 个订单消耗 1 个随机元素', orderInterval: 3, minLevel: 1 },
+      { stage: 2, triggerFloor: 5, desc: '每提交 2 个订单消耗 1 个随机元素', orderInterval: 2, minLevel: 1 },
+      { stage: 3, triggerFloor: 10, desc: '每次提交订单消耗 1 个随机元素，等级 ≥ 2', orderInterval: 1, minLevel: 2 },
+    ],
   },
   {
     id: 'curse_fragile_board',
@@ -314,7 +392,13 @@ const CURSE_POOL = [
     description: '棋盘缩小 4 格',
     penalty: () => {}, // ⏳ 待补充——在 startRogueLevel 中 boardCols = Math.max(4, boardCols - 2); boardRows = Math.max(3, boardRows - 1)
     compensation: '初始获得一个传说祝福',
-    compensator: () => {}, // ⏳ 待补充——在 RogueSystem.startRun() 或 BoonSystem 初始化时添加一个传说祝福
+    compensator: () => {}, // ✅ 已在 BoonSystem.addCurse() 中处理——添加诅咒时直接给予一个传说祝福
+    /** 分阶段升级配置 */
+    stageConfigs: [
+      { stage: 1, triggerFloor: 1, desc: '棋盘减少 2 格', colsReduce: 1, rowsReduce: 0 },
+      { stage: 2, triggerFloor: 4, desc: '棋盘再减 2 格，每关随机封锁 1 格', colsReduce: 1, rowsReduce: 0, extraEffect: 'blockCell' },
+      { stage: 3, triggerFloor: 8, desc: '每关随机封锁 2 格，持续整关', blockCount: 2, extraEffect: 'blockCell' },
+    ],
   },
 ];
 
@@ -410,6 +494,18 @@ const BOSS_CONFIGS = [
     description: '每 15 秒棋盘随机一个格子被灼烧无法使用，持续 5 秒',
     targetScoreMultiplier: 1.8,
     specialRule: 'scorch',
+    mechanics: {
+      /** 灼烧间隔(ms) */
+      scorchInterval: 15000,
+      /** 灼烧持续时间(ms) */
+      scorchDuration: 5000,
+      /** 灼烧蔓延概率(每5秒) */
+      spreadChance: 0.4,
+      /** 愤怒阈值(同时灼烧格子数) */
+      rageThreshold: 3,
+      /** 愤怒时发射器冷却惩罚倍率 */
+      rageCooldownPenalty: 1.3,
+    },
   },
   {
     id: 'boss_ice_witch',
@@ -419,6 +515,18 @@ const BOSS_CONFIGS = [
     description: '发射器冷却速度降低 50%，但合成积分翻倍',
     targetScoreMultiplier: 2.0,
     specialRule: 'chill',
+    mechanics: {
+      /** 冻结间隔(ms) */
+      freezeInterval: 20000,
+      /** 冻结持续时间(ms) */
+      freezeDuration: 8000,
+      /** 解冻所需连续合成次数 */
+      thawMergeCount: 2,
+      /** 暴风雪阈值(同时冻结行数) */
+      blizzardThreshold: 2,
+      /** 暴风雪持续期间发射器暂停时间(ms) */
+      blizzardPauseDuration: 5000,
+    },
   },
   {
     id: 'boss_chaos_core',
@@ -428,6 +536,16 @@ const BOSS_CONFIGS = [
     description: '订单需求每 20 秒全部刷新，已完成不计入进度',
     targetScoreMultiplier: 2.2,
     specialRule: 'chaos_order',
+    mechanics: {
+      /** 混沌波动间隔(ms) */
+      waveInterval: 25000,
+      /** 混沌元素生成间隔(ms) */
+      chaosSpawnInterval: 10000,
+      /** 混沌元素图标 */
+      chaosIcon: '❓',
+      /** 混沌波动等级随机变化范围 */
+      waveLevelRange: 1,
+    },
   },
   {
     id: 'boss_time_devourer',
@@ -437,6 +555,14 @@ const BOSS_CONFIGS = [
     description: '每关限时 90 秒，倒计时结束后强制失败',
     targetScoreMultiplier: 2.5,
     specialRule: 'timed',
+    mechanics: {
+      /** 总时限(ms) */
+      timeLimit: 120000,
+      /** 吞噬间隔(ms) */
+      devourInterval: 12000,
+      /** 提交订单延缓吞噬时间(ms) */
+      orderDelay: 3000,
+    },
   },
   {
     id: 'boss_creation_spirit',
@@ -446,6 +572,16 @@ const BOSS_CONFIGS = [
     description: '所有祝福失效，但棋盘扩大至最大，发射器无冷却',
     targetScoreMultiplier: 3.0,
     specialRule: 'nullify_boons',
+    mechanics: {
+      /** 祝福解封间隔(ms) */
+      unsealInterval: 30000,
+      /** 镜像召唤间隔(ms) */
+      mirrorInterval: 20000,
+      /** 镜像存在时间(ms) */
+      mirrorDuration: 6000,
+      /** 每个祝福增加的目标分百分比 */
+      scorePerBoonPercent: 15,
+    },
   },
 ];
 

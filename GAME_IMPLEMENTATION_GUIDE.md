@@ -44,6 +44,28 @@
 | `rating:calculated` | GameEngine | UIManager | `{ level, score, targetScore, rating, isRogue, nextLevel, isLastLevel }` |
 | `rogue:boons-updated` | BoonSystem | RogueUIManager | boonSummary |
 | `rogue:curses-updated` | BoonSystem | RogueUIManager | curseSummary |
+| `chain-reaction:updated` | GameEngine | UIManager | `{ count, isStorm }` |
+| `rage:updated` | GameEngine | UIManager | `{ value, max }` |
+| `ultimate:used` | GameEngine | UIManager | `{ id, name, icon, rageCost }` |
+| `rogue:curse-upgraded` | BoonSystem | UIManager | `[{ curseId, stage, desc }]` |
+| `boss:init` | GameEngine | UIManager | `{ bossId, bossName, icon, description, mechanics }` |
+| `boss:scorch-cell` | GameEngine | UIManager | `{ row, col, duration }` |
+| `boss:extinguish-cell` | GameEngine | UIManager | `{ row, col }` |
+| `boss:rage-activated` | GameEngine | UIManager | `{ bossId }` |
+| `boss:rage-deactivated` | GameEngine | UIManager | `{ bossId }` |
+| `boss:freeze-row` | GameEngine | UIManager | `{ row, duration }` |
+| `boss:thaw-row` | GameEngine | UIManager | `{ row }` |
+| `boss:blizzard-started` | GameEngine | UIManager | `{ duration }` |
+| `boss:blizzard-ended` | GameEngine | UIManager | `{}` |
+| `boss:chaos-wave` | GameEngine | UIManager | `{ levelRange }` |
+| `boss:chaos-spawn` | GameEngine | UIManager | `{ row, col, icon }` |
+| `boss:devour-timer` | GameEngine | UIManager | `{ remainingMs, totalMs }` |
+| `boss:devour-column` | GameEngine | UIManager | `{ col }` |
+| `boss:devour-delayed` | GameEngine | UIManager | `{ delay }` |
+| `boss:mirror-summoned` | GameEngine | UIManager | `{ positions }` |
+| `boss:boon-unsealed` | GameEngine | UIManager | `{ boonId, boonName, boonIcon }` |
+| `boss:victory` | GameEngine | UIManager | `{ bossId, bossName }` |
+| `boss:defeated` | GameEngine | UIManager | `{ bossId, bossName }` |
 
 ### 1.3 文件结构
 
@@ -303,6 +325,221 @@ _onLevelComplete()
 - 经典模式：发射 `rating:calculated`（由评级面板接管）
 - 肉鸽模式：额外发射 `game:over`（由肉鸽系统接管）
 
+### 3.9 元素连锁反应
+
+#### 状态对象
+
+```javascript
+_chainReactionState = {
+  lastMergeTime: 0,       // 上次合成时间戳
+  consecutiveCount: 0,    // 连续合成次数（2秒窗口内）
+  isStormActive: false,   // 合成风暴是否激活
+}
+```
+
+#### 连锁检测时机
+
+每次 `_executeMerge()` 和 `_executeTripleMerge()` 执行完毕后立即检测：
+
+```
+if (当前时间 - lastMergeTime < 2000ms) {
+  consecutiveCount++
+} else {
+  consecutiveCount = 1
+  isStormActive = false
+}
+lastMergeTime = 当前时间
+```
+
+#### 分级特效
+
+| 连续次数 | 特效 | 实现位置 |
+|----------|------|----------|
+| 第2次 | 粒子爆散数量增加50%（通过 BoardRenderer.playMergeEffect 增强参数） | _executeMerge 连锁检测块 |
+| 第3~4次 | 全屏白色闪烁 + 屏幕震动(6px, 0.15s) + 里程碑通知 | _executeMerge 连锁检测块 |
+| 第5次及以上 | 触发「合成风暴」——自动扫描并合并所有相邻可合成对 | _triggerChainStorm() |
+
+三合一阈值更低：第2次即触发全屏闪烁+震动。
+
+#### 合成风暴（_triggerChainStorm）
+
+1. 检查 `isStormActive` 锁，已激活则跳过
+2. 全屏金色闪烁开场 + 强震(10px, 0.25s)
+3. 最多执行3轮扫描合并：
+   - 每轮调用 `_findAllMergeablePairs()` 找出所有相邻可合成对
+   - 自动执行合并（调用 tryMerge + 移除旧元素 + 放置新元素 + 播放动画特效）
+   - 积分累加，连击计数递增
+4. 完成后设置3秒冷却期（setTimeout 重置 isStormActive = false）
+5. 连击中断时同步重置连锁状态
+
+#### 查找可合成对（_findAllMergeablePairs）
+
+遍历棋盘每个格子，检查其右邻和下邻是否同类型同等级，使用 visited Set 去重。
+
+### 3.10 怒气/能量条系统
+
+#### 怒气获取规则
+
+| 操作 | 获得怒气值 | 说明 |
+|------|-----------|------|
+| 合成成功 | 8 + min(连击数,5)x3 | 基础8点，连击每层+3（上限+15） |
+| 合成 Lv.4+ 元素 | 15 | 覆盖基础值，高级合成额外奖励 |
+| 提交订单 | 12 | 完成订单 |
+
+怒气上限：100
+
+#### 怒气条UI
+
+位于屏幕右侧，竖直半透明条：
+
+- **颜色变化**：<30%蓝色 → <60%紫色 → <80%红色 → >=80%金色脉冲发光
+- **数值显示**：条内显示当前怒气数字
+- **大招按钮**：底部 🔥 按钮，怒气>=80时发光提示
+- **点击大招按钮**：展开大招选择面板（暂停游戏）
+
+#### 大招池定义
+
+**基础3个（无需祝福）：**
+
+| ID | 名称 | 图标 | 消耗 | 冷却 | 效果 |
+|----|------|------|------|------|------|
+| rage_clear | 元素净化 | 💥 | 40 | 8s | 清除棋盘上所有 Lv.1 元素 |
+| rage_boost | 能量爆发 | ⚡ | 30 | 6s | 立即重置所有发射器冷却 |
+| rage_score | 积分增幅 | 🌟 | 50 | 20s | 10秒内所有得分 x2 |
+
+**祝福解锁5个：**
+
+| ID | 名称 | 图标 | 消耗 | 冷却 | 解锁祝福 | 效果 |
+|----|------|------|------|------|----------|------|
+| rage_merge_up | 全体升级 | ⬆ | 60 | 25s | boon_rage_merge_up | 棋盘上所有元素等级+1 |
+| rage_fill_board | 元素填充 | 🧩 | 35 | 12s | boon_rage_fill | 在空位随机生成基础元素 |
+| rage_combo_x3 | 连击风暴 | 🌀 | 55 | 22s | boon_rage_combo | 15秒内连击倍率固定 x3 |
+| rage_order_refresh | 订单重置 | 📋 | 45 | 18s | boon_rage_order | 刷新所有订单为高奖励订单 |
+| rage_super_merge | 超级合成 | 🔮 | 70 | 30s | boon_rage_super | 随机将一对相邻同等级元素合成高两级 |
+
+#### 大招释放流程
+
+```
+useUltimate(ultimateId)
+  ├─ 查找大招定义
+  ├─ 检查是否解锁（有 unlockBoon 且未拥有 -> 拒绝）
+  ├─ 检查怒气是否足够（this._rageValue >= ult.rageCost）
+  ├─ 检查全局冷却（距上次大招 >= max(15000, ult.cooldown)）
+  ├─ 扣除怒气 -> 记录冷却时间
+  ├─ 发射 ultimate:used 事件（UI层显示全屏特效）
+  └─ 调用 ult.effect() 执行具体效果
+```
+
+#### 大招效果实现
+
+| 大招 | 实现方法 | 详细逻辑 |
+|------|----------|----------|
+| 元素净化 | _applyUltimateClear() | 遍历棋盘，移除所有 level===1 的元素，更新渲染 |
+| 能量爆发 | _applyUltimateBoost() | 遍历所有发射器调用 resetCooldown()，更新UI |
+| 积分增幅 | _applyUltimateScoreBoost() | 保存原始 scoreMultiplier，乘以2，10秒后恢复；创建视觉横幅 |
+| 全体升级 | _applyUltimateMergeUp() | 遍历棋盘，非空且未达最高等级的元素 level++，更新渲染 |
+| 元素填充 | _applyUltimateFillBoard() | 遍历棋盘空位，随机选择元素类型生成 Lv.1 元素 |
+| 连击风暴 | _applyUltimateComboX3() | 将 COMBO_WINDOW_MS 设为极大值确保不中断，15秒后恢复 |
+| 订单重置 | _applyUltimateOrderRefresh() | 遍历所有订单，奖励乘以1.5，重新渲染 |
+| 超级合成 | _applyUltimateSuperMerge() | 调用 _findAllMergeablePairs 找第一对，合成高两级 |
+
+### 3.11 Boss战机制
+
+#### Boss 状态对象
+
+```javascript
+_bossState = {
+  isActive: false,          // 是否处于Boss战中
+  bossId: null,             // 当前Boss ID
+  lastTickTime: 0,          // 上次tick时间戳
+  levelStartTime: 0,        // 关卡开始时间
+  // 熔岩巨像
+  scorchedCells: [],        // [{row, col, endTime}] 被灼烧的格子
+  lastScorchTime: 0,        // 上次灼烧时间
+  isRageActive: false,      // 愤怒状态
+  // 冰霜女巫
+  frozenRows: new Set(),    // 被冻结的行号集合
+  lastFreezeTime: 0,        // 上次冻结时间
+  thawMergeCount: 0,        // 解冻进度计数
+  isBlizzardActive: false,  // 暴风雪状态
+  // 混沌之核
+  lastWaveTime: 0,          // 上次混沌波动时间
+  lastChaosSpawnTime: 0,    // 上次生成混沌元素时间
+  chaosElements: [],        // [{row, col}] 混沌元素位置
+  // 时间吞噬者
+  devourTimer: 120000,      // 吞噬倒计时(ms)
+  lastDevourTime: 0,        // 上次吞噬时间
+  devouredColumns: [],      // 已被吞噬的列号
+  // 创世之灵
+  sealedBoons: [],          // 被封存的祝福ID列表
+  unsealOrder: [],          // 解封顺序
+  lastUnsealTime: 0,        // 上次解封时间
+  lastMirrorTime: 0,        // 上次镜像召唤时间
+  mirrorElements: [],       // [{row, col, endTime}] 镜像元素
+}
+```
+
+#### Boss 战初始化流程
+
+```
+_initBossBattle(bossId, floor)
+  ├─ 从 BOSS_CONFIGS 获取配置
+  ├─ 初始化 _bossState（各Boss专属字段置默认值）
+  ├─ 应用Boss特殊规则到游戏状态
+  │   ├─ 冰霜女巫：发射器冷却速度降低50%
+  │   ├─ 时间吞噬者：设置倒计时
+  │   └─ 创世之灵：封印所有祝福
+  ├─ 扩大棋盘（创世之灵：最大尺寸）
+  └─ 发射 boss:init 事件通知UI
+```
+
+#### Boss tick（游戏循环中每秒检查4次）
+
+```
+_tickBossMechanics(now)
+  switch(bossId):
+    case 'boss_lava_giant':     _tickLavaGiant(now, mechanics)
+    case 'boss_ice_witch':      _tickIceWitch(now, mechanics)
+    case 'boss_chaos_core':     _tickChaosCore(now, mechanics)
+    case 'boss_time_devourer':  _tickTimeDevourer(now, mechanics)
+    case 'boss_creation_spirit':_tickCreationSpirit(now, mechanics)
+```
+
+#### 各Boss机制详解
+
+**熔岩巨像（第3层）：**
+- 灼烧间隔：15秒灼烧一个随机格子，持续5秒不可用
+- 灼烧蔓延：每5秒有40%概率将灼烧扩散到相邻格子
+- 愤怒状态：同时>=3格被灼烧时触发，发射器冷却+30%
+- 玩家交互：在灼烧格子上合成可以灭火（_extinguishOnMerge）
+- 视觉表现：被灼烧格子火焰动画，蔓延时岩浆流动效果
+
+**冰霜女巫（第6层）：**
+- 冻结间隔：20秒冻结一整行，持续8秒
+- 冻结行上元素无法移动、无法参与合成
+- 暴风雪：>=2行同时冻结时触发，所有发射器暂停5秒
+- 玩家交互：在冻结行上连续合成2次可解冻整行
+- 视觉表现：冻结行冰晶覆盖，解冻冰块碎裂动画
+
+**混沌之核（第9层）：**
+- 混沌波动：每25秒刷新所有订单并随机改变元素等级+-1
+- 混沌元素：每10秒在棋盘空位生成❓元素，可参与合成但结果随机
+- 提交含混沌元素的订单奖励减半
+- 视觉表现：混沌元素紫色旋涡动画，波动时屏幕扭曲
+
+**时间吞噬者（第12层）：**
+- 倒计时：120秒，归零强制失败
+- 列吞噬：每12秒吞噬最右一列（变为不可用，元素消失）
+- 玩家交互：提交订单延缓下一次吞噬3秒
+- 最后10秒屏幕边缘破碎动画
+- 视觉表现：被吞噬区域紫色虚空，吞噬过程撕裂动画
+
+**创世之灵（第15层）：**
+- 祝福封印：开局封印所有祝福，每30秒随机解封一个
+- 镜像召唤：每20秒召唤一波混沌镜像（与棋盘现有元素一一对应），镜像无法合成但占据格子，6秒后消失
+- 目标分动态调整：每解封一个祝福，目标分增加15%
+- 视觉表现：Boss本体在屏幕后方若隐若现，解封时金光绽放
+
 ---
 
 ## 四、子系统详解
@@ -389,6 +626,64 @@ _onLevelComplete()
 | curse_element_confusion | 元素混淆 | 发射器随机产出元素类型 | 棋盘扩大2格 |
 | curse_greed_price | 贪婪代价 | 每次提交订单额外消耗1个随机元素 | 订单积分翻倍 |
 | curse_fragile_board | 脆弱棋盘 | 棋盘缩小4格 | 初始获得一个传说祝福 |
+
+#### 诅咒动态化（分阶段升级）
+
+每个诅咒有3个阶段，随层数推进逐步解锁。阶段配置在 `rogueConfig.js` 的 `stageConfigs` 数组中定义。
+
+##### 缓慢生长 🐢
+
+| 阶段 | 触发层数 | 效果 |
+|------|----------|------|
+| 1 | 第1关起 | 所有发射器冷却 +20% |
+| 2 | 第3关起 | 冷却惩罚升至 +40% |
+| 3 | 第6关起 | 冷却惩罚升至 +60%，且每提交5个订单额外+5%（本局永久累加） |
+
+##### 元素混淆 🎲
+
+| 阶段 | 触发层数 | 效果 |
+|------|----------|------|
+| 1 | 第1关起 | 发射器有30%概率产出随机类型元素 |
+| 2 | 第4关起 | 概率升至60% |
+| 3 | 第8关起 | 100%随机产出，且每关开始时会随机交换棋盘上3对元素位置 |
+
+##### 贪婪代价 👹
+
+| 阶段 | 触发层数 | 效果 |
+|------|----------|------|
+| 1 | 第1关起 | 每提交3个订单消耗1个随机元素 |
+| 2 | 第5关起 | 每提交2个订单消耗1个随机元素 |
+| 3 | 第10关起 | 每次提交订单消耗1个随机元素，且消耗的元素等级>=2 |
+
+##### 脆弱棋盘 💔
+
+| 阶段 | 触发层数 | 效果 |
+|------|----------|------|
+| 1 | 第1关起 | 棋盘减少2格 |
+| 2 | 第4关起 | 棋盘再减2格，且每关开始时随机封锁1格（不可用） |
+| 3 | 第8关起 | 每关开始时随机封锁2格，封锁持续整关 |
+
+##### 诅咒升级机制
+
+```
+checkCurseProgression(floor) -- 每关开始时调用
+  ├─ 遍历所有诅咒的 stageConfigs
+  ├─ 若当前层数 >= triggerFloor 且未达到该阶段 -> 升级
+  ├─ 记录升级信息 { curseId, stage, desc }
+  └─ 发射 rogue:curse-upgraded 事件
+
+applyCurseStage(curseId, stage, emitters) -- 应用指定阶段的惩罚
+  ├─ 查找对应阶段的 apply 回调
+  ├─ 应用到发射器（冷却惩罚、随机产出等）
+  └─ 处理额外效果（permanentGrowth / swapElements / blockCell）
+```
+
+##### 诅咒可视化
+
+- 诅咒图标常驻显示在屏幕左上角（`.curse-icons-container`）
+- 鼠标悬停显示当前阶段和具体效果
+- 诅咒升级时屏幕边缘出现暗红色闪烁 + 通知提示
+- 阶段3的诅咒图标周围有火焰脉冲发光动画
 
 ### 4.4 波次系统
 
@@ -701,6 +996,83 @@ _showBanner(text, subtext, typeClass, duration)
 | 通知Toast | 底部弹出(0.4s过渡)，2秒后消失 | UIManager.showNotification |
 | 弹窗 | 背景模糊遮罩 + 缩放入场 | CSS .game-overlay + .game-modal |
 
+### 6.10 元素连锁反应特效
+
+| 触发条件 | 特效 | 实现位置 |
+|----------|------|----------|
+| 第2次连锁 | 粒子爆散数量增加50% | GameEngine._executeMerge 连锁检测 |
+| 第3~4次连锁 | 全屏白色闪光 + 屏幕震动(6px, 0.15s) | BoardRenderer._createFlashOverlay + _applyScreenShake |
+| 第5次及以上 | 合成风暴：全屏金色闪烁 + 强震(10px, 0.25s) + 自动合并 | GameEngine._triggerChainStorm |
+| 合成风暴每轮合并 | 逐个播放合成动画和特效 | BoardRenderer.playMergeAnimation + playMergeEffect |
+| 连锁中断 | 同步重置连锁状态（随 Combo Break） | GameEngine._chainReactionState 重置 |
+
+### 6.11 怒气/大招系统特效
+
+| 触发条件 | 特效 | 实现位置 |
+|----------|------|----------|
+| 怒气值变化 | 右侧竖直条高度变化 + 颜色渐变（蓝->紫->红->金） | UIManager.updateRageBar |
+| 怒气>=80% | 怒气条脉冲发光动画 + 大招按钮发光 | CSS .rage-bar-pulsing + .ultimate-btn-ready |
+| 点击大招按钮 | 大招选择面板展开（缩放入场） | UIManager._showUltimatePanel |
+| 大招面板卡片 | 锁定/未满怒/就绪三种状态样式 | CSS .ultimate-card-locked / .ultimate-card-no-rage |
+| 释放大招 | 全屏金色闪光 + 大招名称居中显示(2s) | UIManager._onUltimateUsed |
+| 积分增幅激活 | 顶部横幅 "🌟 积分增幅！得分 x2" (10s) | GameEngine._applyUltimateScoreBoost |
+| 连击风暴激活 | 顶部横幅 "🌀 连击风暴！倍率固定 x3" (15s) | GameEngine._applyUltimateComboX3 |
+
+### 6.12 诅咒升级特效
+
+| 触发条件 | 特效 | 实现位置 |
+|----------|------|----------|
+| 诅咒图标常驻 | 左上角暗红半透明背景 + 诅咒图标 | UIManager.createCurseIcons |
+| 鼠标悬停 | 显示当前阶段和效果描述 | CSS .curse-icon:hover + tooltip |
+| 诅咒升级 | 屏幕边缘暗红色闪烁(0.6s) + 图标放大弹跳 | UIManager._showCurseUpgradeFlash |
+| 阶段3诅咒 | 图标周围火焰脉冲发光动画 | CSS .curse-icon-stage3 |
+
+### 6.13 Boss战特效
+
+| 触发条件 | 特效 | 实现位置 |
+|----------|------|----------|
+| Boss战开始 | 屏幕上方Boss HUD滑入（名称、图标、血量/进度） | UIManager._onBossInit |
+| 熔岩巨像·灼烧 | 格子显示火焰闪烁动画 + 红色边框脉冲 | UIManager._onBossScorchCell |
+| 熔岩巨像·灭火 | 火焰消散动画 + 绿色闪烁 | UIManager._onBossExtinguishCell |
+| 熔岩巨像·愤怒 | 屏幕边缘红色脉冲 + 发射器按钮抖动 | UIManager._onBossRageActivated |
+| 冰霜女巫·冻结 | 整行冰晶发光覆盖层 + ❄粒子飘落 | UIManager._onBossFreezeRow |
+| 冰霜女巫·解冻 | 冰块碎裂动画 + 碎片飞散 | UIManager._onBossThawRow |
+| 冰霜女巫·暴风雪 | 全屏白色半透明覆盖层 + 雪花粒子(5s) | UIManager._onBossBlizzardStarted |
+| 混沌之核·波动 | 屏幕紫色扭曲效果 + 订单卡片闪烁 | UIManager._onBossChaosWave |
+| 混沌之核·生成 | ❓元素紫色旋涡入场动画 | UIManager._onBossChaosSpawn |
+| 时间吞噬者·倒计时 | 屏幕上方倒计时条收缩 + 颜色变化(绿->黄->红) | UIManager._onBossDevourTimer |
+| 时间吞噬者·吞噬 | 列消失动画 + 紫色虚空裂缝效果 | UIManager._onBossDevourColumn |
+| 时间吞噬者·延缓 | 倒计时条短暂闪烁绿光 | UIManager._onBossDevourDelayed |
+| 创世之灵·镜像 | 灰色半透明元素从棋盘边缘飞入 | UIManager._onBossMirrorSummoned |
+| 创世之灵·解封 | 金色光柱从天而降 + 祝福图标绽放 | UIManager._onBossBoonUnsealed |
+| Boss击败 | 全屏金色粒子雨 + Boss碎裂消散 | UIManager._onBossVictory |
+| Boss失败 | 屏幕变暗 + 红色遮罩渐入 | UIManager._onBossDefeated |
+
+### 6.14 CSS关键帧动画新增
+
+| 动画名 | 用途 | 持续时间 | 所属元素 |
+|--------|------|----------|----------|
+| rageBarPulse | 怒气满时脉冲发光 | 1.5s循环 | .rage-bar-pulsing |
+| ultimatePanelIn | 大招面板缩放入场 | 0.3s | .ultimate-panel.show |
+| ultimatePanelOut | 大招面板缩小消失 | 0.3s | .ultimate-panel.hide |
+| curseIconPulse | 诅咒图标呼吸 | 2s循环 | .curse-icon |
+| curseStage3Glow | 阶段3诅咒火焰发光 | 1s循环 | .curse-icon-stage3 |
+| curseUpgradeFlash | 诅咒升级暗红闪烁 | 0.6s | .curse-upgrade-flash |
+| bossHudSlideIn | Boss HUD从顶部滑入 | 0.5s | .boss-hud-container |
+| scorchFlame | 灼烧格子火焰闪烁 | 0.8s循环 | .cell-scorched |
+| scorchSpread | 灼烧蔓延岩浆流动 | 1.5s | .cell-scorch-spread |
+| freezeCrystal | 冻结行冰晶发光 | 2s循环 | .row-frozen |
+| freezeShard | 解冻冰块碎裂 | 0.5s | .cell-thaw |
+| blizzardOverlay | 暴风雪雪花飘落 | 5s | .blizzard-overlay |
+| chaosVortex | 混沌元素旋涡旋转 | 1s循环 | .cell-chaos-element |
+| chaosWave | 混沌波动屏幕扭曲 | 0.8s | .chaos-wave-overlay |
+| devourVoid | 吞噬列虚空裂缝 | 1s | .cell-devoured |
+| devourRip | 吞噬过程撕裂动画 | 0.6s | .cell-devouring |
+| mirrorEntry | 镜像元素飞入 | 0.4s | .cell-mirror-element |
+| unsealBeam | 祝福解封金光 | 1.2s | .boon-unseal-beam |
+| victoryGoldRain | Boss击败金色粒子雨 | 3s | .boss-victory-overlay |
+| defeatDarken | Boss失败暗色遮罩 | 1s | .boss-defeat-overlay |
+
 ---
 
 ## 七、肉鸽模式
@@ -714,13 +1086,98 @@ _showBanner(text, subtext, typeClass, duration)
 
 ### 7.2 Boss配置
 
-| Boss | 所在层 | 特殊规则 |
-|------|--------|----------|
-| 熔岩巨像 | 3 | 每15秒随机灼烧一个格子（5秒不可用） |
-| 冰霜女巫 | 6 | 发射器冷却速度降低50%，合成积分翻倍 |
-| 混沌之核 | 9 | 订单需求每20秒全部刷新 |
-| 时间吞噬者 | 12 | 限时90秒，倒计时结束强制失败 |
-| 创世之灵 | 15 | 所有祝福失效，棋盘扩大至最大，发射器无冷却 |
+Boss战在肉鸽模式第3/6/9/12/15层触发，每个Boss有独特的战斗机制和视觉表现。
+
+#### Boss配置总览
+
+| Boss | 所在层 | 目标分倍率 | 特殊规则 |
+|------|--------|-----------|----------|
+| 熔岩巨像 🗿 | 3 | x1.8 | scorch（灼烧） |
+| 冰霜女巫 ❄ | 6 | x2.0 | chill（冻结） |
+| 混沌之核 🌀 | 9 | x2.2 | chaos_order（混沌订单） |
+| 时间吞噬者 ⏳ | 12 | x2.5 | timed（限时） |
+| 创世之灵 🌟 | 15 | x3.0 | nullify_boons（封印祝福） |
+
+#### 熔岩巨像（第3层）
+
+**机制参数：**
+- 灼烧间隔：15秒，灼烧一个随机格子，持续5秒
+- 灼烧蔓延：每5秒有40%概率将灼烧扩散到相邻格子
+- 愤怒阈值：同时>=3格被灼烧时触发愤怒状态，发射器冷却+30%
+
+**玩家交互：**
+- 在灼烧格子上进行合成可以灭火（_extinguishOnMerge）
+- 需要权衡——优先灭火还是顶着惩罚冲分
+
+**视觉表现：**
+- 被灼烧格子显示火焰闪烁动画（.cell-scorched）
+- 蔓延时有岩浆流动效果（.cell-scorch-spread）
+- 愤怒状态屏幕边缘红色脉冲
+
+#### 冰霜女巫（第6层）
+
+**机制参数：**
+- 冻结间隔：20秒，冻结一整行，持续8秒
+- 解冻条件：在该行任意格子上连续合成2次
+- 暴风雪阈值：>=2行同时冻结时触发，所有发射器暂停5秒
+
+**玩家交互：**
+- 冻结行上元素无法移动、无法参与合成
+- 需要规划合成位置，避免关键元素被困在冻结行
+
+**视觉表现：**
+- 冻结行显示冰晶覆盖效果（.row-frozen）
+- 解冻时冰块碎裂动画（.cell-thaw）
+- 暴风雪时全屏白色半透明覆盖层+雪花粒子
+
+#### 混沌之核（第9层）
+
+**机制参数：**
+- 混沌波动间隔：25秒，刷新所有订单并随机改变元素等级+-1
+- 混沌元素生成间隔：10秒，在棋盘空位生成❓元素
+- 混沌元素可参与合成，但合成后会随机变成另一种元素
+
+**玩家交互：**
+- 提交含混沌元素的订单奖励减半
+- 需要快速处理混沌元素，否则棋盘会被占据
+
+**视觉表现：**
+- 混沌元素有紫色旋涡动画（.cell-chaos-element）
+- 混沌波动时屏幕扭曲效果（.chaos-wave-overlay）
+
+#### 时间吞噬者（第12层）
+
+**机制参数：**
+- 总时限：120秒，倒计时归零强制失败
+- 吞噬间隔：12秒，吞噬最右一列（变为不可用，元素消失）
+- 订单延缓：每次提交订单推迟下一次吞噬3秒
+
+**玩家交互：**
+- 需要在不断缩小的棋盘上高效运作
+- 订单提交不仅是得分手段，也是生存手段
+
+**视觉表现：**
+- 倒计时条实时更新，颜色变化（绿->黄->红）
+- 被吞噬区域显示紫色虚空（.cell-devoured）
+- 吞噬过程中有撕裂动画（.cell-devouring）
+- 最后10秒屏幕边缘破碎动画
+
+#### 创世之灵（第15层）
+
+**机制参数：**
+- 祝福解封间隔：30秒，随机解封一个被封印的祝福
+- 镜像召唤间隔：20秒，召唤一波混沌镜像（与棋盘现有元素一一对应）
+- 镜像存在时间：6秒，无法合成但占据格子
+- 目标分动态调整：每解封一个祝福，目标分增加15%
+
+**玩家交互：**
+- 祝福不是全部失效，而是被封印——每30秒随机解封一个
+- 需要决定优先解封哪些祝福
+
+**视觉表现：**
+- Boss本体在屏幕后方若隐若现
+- 镜像元素灰色半透明，从棋盘边缘飞入
+- 解封祝福时金色光柱从天而降
 
 ### 7.3 随机事件（EVENT_POOL）
 
@@ -840,3 +1297,39 @@ startRogueLevel(targetScore, node)
 5. **三合一与二合一互斥**：拥有三重奏祝福时，`_onCellClick` 中先检测三合一模式，不进 `tryMerge`
 6. **结算弹窗**：经典模式只保留评级面板，不发射 `game:over`（防止双重弹窗）
 7. **语法检查**：UIManager.js 的正则花括号检查会误报模板字面量 `${}`，以逐行逐字符扫描为准
+
+### 9.8 元素连锁反应开发规范
+
+1. 连锁检测必须在每次合成（二合一和三合一）后立即执行
+2. 连锁状态与连击超时联动——连击中断时必须同步重置连锁计数
+3. 合成风暴最多执行3轮，防止死循环
+4. 合成风暴结束后必须设置冷却期（3秒），避免重复触发
+5. `_findAllMergeablePairs` 使用 visited Set 去重，避免同一对元素被重复处理
+
+### 9.9 怒气系统开发规范
+
+1. 怒气值范围固定 0~100，超出部分自动溢出
+2. 大招释放需同时检查怒气值、冷却时间和解锁条件
+3. 全局冷却取 _ultimateCooldown(15000) 和大招独立冷却的较大值
+4. 大招面板打开时游戏暂停（通过 state.isPaused 控制）
+5. 新增祝福解锁的大招需同时在 _ultimates 数组和 BOON_POOL 中添加对应祝福
+6. 每个大招的 effect 函数必须是独立的 _applyUltimate* 方法
+
+### 9.10 诅咒动态化开发规范
+
+1. 每个诅咒的 stageConfigs 数组按 stage 升序排列
+2. triggerFloor 表示该阶段首次生效的层数（从1起始）
+3. 诅咒升级在每关开始时通过 checkCurseProgression(floor) 自动检测
+4. 阶段3的特殊效果（如永久累加、交换元素、封锁格子）需在对应方法中单独处理
+5. 诅咒图标容器在 createCurseIcons() 中创建，在 reset() 中清理
+6. 诅咒升级动画通过 rogue:curse-upgraded 事件驱动
+
+### 9.11 Boss战开发规范
+
+1. 每个Boss的独特逻辑封装在独立的 _tick* 方法中，switch 分发
+2. Boss 状态统一存储在 _bossState 对象中，按Boss ID区分字段
+3. Boss tick 频率与游戏循环一致（约每秒4次）
+4. Boss 与玩家的交互通过修改游戏引擎的现有方法实现（如 _executeMerge 中调用灭火/解冻）
+5. 新增Boss只需在 BOSS_CONFIGS 中添加配置 + 实现对应的 _tick* 方法 + 注册事件监听
+6. Boss 战结束时必须清理所有定时器和状态（_onBossVictory / _onBossDefeat）
+7. Boss HUD 和特效 DOM 元素在战斗结束后必须清理

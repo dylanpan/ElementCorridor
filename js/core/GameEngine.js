@@ -47,6 +47,14 @@ class GameEngine {
     // 已触发的连击里程碑（用于首次完整效果）
     this._triggeredMilestones = new Set();
 
+    // ==================== 元素连锁反应状态 ====================
+    /** @type {{ lastMergeTime: number, consecutiveCount: number, isStormActive: boolean }} */
+    this._chainReactionState = {
+      lastMergeTime: 0,       // 上次合成时间戳
+      consecutiveCount: 0,    // 连续合成次数（2秒窗口内）
+      isStormActive: false,   // 合成风暴是否激活
+    };
+
     // ==================== 波次系统状态 ====================
     /** @type {Array<{type:string,target:number,label:string,reward:number}>} */
     this._waves = [];
@@ -82,6 +90,147 @@ class GameEngine {
     this._lastEventCheckTime = 0;
     /** @type {number} 上次发射事件tick的时间戳 */
     this._lastTickTime = 0;
+
+    // ==================== 怒气/能量条系统 ====================
+    /** @type {number} 当前怒气值（0-100） */
+    this._rageValue = 0;
+    /** @type {boolean} 大招面板是否打开 */
+    this._isUltimatePanelOpen = false;
+
+    // ==================== Boss 战机制 ====================
+    /** @type {object|null} 当前 Boss 配置 */
+    this._currentBossConfig = null;
+    /** @type {object} Boss 运行时状态 */
+    this._bossState = {
+      // 通用
+      isActive: false,
+      bossId: null,
+      lastTickTime: 0,
+
+      // 熔岩巨像
+      scorchedCells: [],       // [{row, col, expireAt}]
+      lastScorchTime: 0,
+      isRageActive: false,
+
+      // 冰霜女巫
+      frozenRows: new Set(),   // 被冻结的行索引
+      lastFreezeTime: 0,
+      thawMergeCount: 0,       // 当前解冻进度
+      isBlizzardActive: false,
+      blizzardEndTime: 0,
+
+      // 混沌之核
+      chaosElements: [],       // [{row, col, level, icon}]
+      lastWaveTime: 0,
+      lastChaosSpawnTime: 0,
+
+      // 时间吞噬者
+      devourTimer: 0,          // 吞噬倒计时(ms)
+      lastDevourTime: 0,
+      timeLimit: 120000,
+      levelStartTime: 0,
+
+      // 创世之灵
+      sealedBoons: [],         // 被封存的祝福ID列表
+      mirrors: [],             // [{row, col, expireAt}]
+      lastUnsealTime: 0,
+      lastMirrorTime: 0,
+      unsealOrder: [],         // 解封顺序
+    };
+
+    /**
+     * 大招池定义
+     * 基础3个 + 祝福解锁5个
+     * @type {Array<{id:string, name:string, icon:string, desc:string, rageCost:number, cooldown:number, effect:function, unlockBoon?:string}>}
+     */
+    this._ultimates = [
+      {
+        id: 'rage_clear',
+        name: '元素净化',
+        icon: '💥',
+        desc: '清除棋盘上所有 Lv.1 元素',
+        rageCost: 40,
+        cooldown: 8000,
+        lastUsedTime: 0,
+        effect: () => this._applyUltimateClear(),
+      },
+      {
+        id: 'rage_boost',
+        name: '能量爆发',
+        icon: '⚡',
+        desc: '立即重置所有发射器冷却',
+        rageCost: 30,
+        cooldown: 6000,
+        lastUsedTime: 0,
+        effect: () => this._applyUltimateBoost(),
+      },
+      {
+        id: 'rage_score',
+        name: '积分增幅',
+        icon: '🌟',
+        desc: '10秒内所有得分 x2',
+        rageCost: 50,
+        cooldown: 20000,
+        lastUsedTime: 0,
+        effect: () => this._applyUltimateScoreBoost(),
+      },
+      // === 以下5个由祝福解锁 ===
+      {
+        id: 'rage_merge_up',
+        name: '全体升级',
+        icon: '⬆️',
+        desc: '棋盘上所有元素等级+1',
+        rageCost: 60,
+        cooldown: 25000,
+        lastUsedTime: 0,
+        unlockBoon: 'boon_rage_merge_up',
+        effect: () => this._applyUltimateMergeUp(),
+      },
+      {
+        id: 'rage_fill_board',
+        name: '元素填充',
+        icon: '🧩',
+        desc: '在空位随机生成基础元素',
+        rageCost: 35,
+        cooldown: 12000,
+        lastUsedTime: 0,
+        unlockBoon: 'boon_rage_fill',
+        effect: () => this._applyUltimateFillBoard(),
+      },
+      {
+        id: 'rage_combo_x3',
+        name: '连击风暴',
+        icon: '🌀',
+        desc: '15秒内连击倍率固定 x3',
+        rageCost: 55,
+        cooldown: 22000,
+        lastUsedTime: 0,
+        unlockBoon: 'boon_rage_combo',
+        effect: () => this._applyUltimateComboX3(),
+      },
+      {
+        id: 'rage_order_refresh',
+        name: '订单重置',
+        icon: '📋',
+        desc: '刷新所有订单为高奖励订单',
+        rageCost: 45,
+        cooldown: 18000,
+        lastUsedTime: 0,
+        unlockBoon: 'boon_rage_order',
+        effect: () => this._applyUltimateOrderRefresh(),
+      },
+      {
+        id: 'rage_super_merge',
+        name: '超级合成',
+        icon: '🔮',
+        desc: '随机将一对相邻同等级元素合成高两级',
+        rageCost: 70,
+        cooldown: 30000,
+        lastUsedTime: 0,
+        unlockBoon: 'boon_rage_super',
+        effect: () => this._applyUltimateSuperMerge(),
+      },
+    ];
 
     // ==================== 评分评级数据 ====================
     /** @type {number} 关卡开始时间戳 */
@@ -147,16 +296,23 @@ class GameEngine {
       boardCols = Math.max(4, boardCols - 1);
     }
 
+    // Boss 节点：扩大棋盘
+    if (node.type === 'boss') {
+      boardCols += 2;
+      boardRows += 1;
+    }
+
     // 应用祝福/诅咒对棋盘大小的调整
     if (this.boonSystem) {
       // boon_expand_bag：棋盘增加一行格子
       if (this.boonSystem.hasBoon('boon_expand_bag')) {
         boardRows += 1;
       }
-      // curse_fragile_board：棋盘缩小 4 格
+      // curse_fragile_board：按阶段缩减棋盘
       if (this.boonSystem.hasCurse('curse_fragile_board')) {
-        boardCols = Math.max(4, boardCols - 2);
-        boardRows = Math.max(3, boardRows - 1);
+        const reduction = this.boonSystem.getFragileBoardReduction();
+        boardCols = Math.max(4, boardCols - reduction.colsReduce);
+        boardRows = Math.max(3, boardRows - reduction.rowsReduce);
       }
       // curse_element_confusion 补偿：棋盘扩大 2 格
       if (this.boonSystem.hasCurse('curse_element_confusion')) {
@@ -178,6 +334,15 @@ class GameEngine {
 
     // 初始化发射器（使用所有可用发射器）
     this.state.emitters = EMITTER_CONFIGS.map((config) => new Emitter(config));
+
+    // 检查诅咒升级（按当前层数）
+    if (this.boonSystem) {
+      const floor = this.rogueSystem ? this.rogueSystem.getCurrentFloor() : 1;
+      const upgraded = this.boonSystem.checkCurseProgression(floor);
+      if (upgraded.length > 0) {
+        console.log('[诅咒升级]', upgraded);
+      }
+    }
 
     // 应用祝福到发射器
     if (this.boonSystem) {
@@ -224,13 +389,52 @@ class GameEngine {
     this._startAutoSave();
 
     // 初始化波次系统
-    this._initWaves(level);
+    this._initWaves(this.state.level);
 
     // 隐藏弹窗
     this.uiManager.hideModal();
 
     // 启动自动整理（如果拥有自动整理祝福）
     this._startAutoSort();
+
+    // === 诅咒阶段：关卡开始效果 ===
+    if (this.boonSystem) {
+      // 元素混淆阶段3：随机交换棋盘上3对元素位置
+      if (this.boonSystem.shouldSwapElementsOnLevelStart()) {
+        this._swapRandomElements(3);
+        window.eventBus.emit('notification', {
+          message: '🎲 元素混淆加剧！棋盘上 3 对元素被随机交换了位置',
+          type: 'warning',
+        });
+      }
+
+      // 脆弱棋盘阶段2/3：随机封锁格子
+      const blockCount = this.boonSystem.getFragileBlockCount();
+      if (blockCount > 0) {
+        this._blockRandomCells(blockCount);
+      }
+    }
+
+    // === Boss 战初始化 ===
+    if (node.type === 'boss' && node.bossId) {
+      this._initBossBattle(node.bossId, floor);
+    } else {
+      this._currentBossConfig = null;
+      this._bossState.isActive = false;
+      this._bossState.bossId = null;
+    }
+
+    // 创建怒气条
+    if (this.uiManager.createRageBar) {
+      this.uiManager.createRageBar(this._ultimates);
+    }
+    // 重置怒气
+    this._rageValue = 0;
+    // 重置所有大招冷却
+      if (this._ultimates) {
+        for (const u of this._ultimates) u.lastUsedTime = 0;
+      }
+    window.eventBus.emit('rage:updated', { value: 0, max: 100 });
   }
 
   // ==================== 波次系统 ====================
@@ -1010,6 +1214,12 @@ class GameEngine {
         this._lastTickTime = timestamp;
       }
 
+      // === Boss 战 tick（约每秒检查4次） ===
+      if (this._bossState.isActive && timestamp - this._bossState.lastTickTime > 200) {
+        this._tickBossMechanics(Date.now());
+        this._bossState.lastTickTime = timestamp;
+      }
+
       this._gameLoopId = requestAnimationFrame(loop);
     };
 
@@ -1059,6 +1269,592 @@ class GameEngine {
       clearInterval(this._autoSortTimerId);
       this._autoSortTimerId = null;
     }
+  }
+
+  // ==================== Boss 战机制 ====================
+
+  /**
+   * 初始化 Boss 战
+   * @param {string} bossId - Boss ID
+   * @param {number} floor - 当前层数
+   */
+  _initBossBattle(bossId, floor) {
+    const config = BOSS_CONFIGS.find(b => b.id === bossId);
+    if (!config) return;
+
+    this._currentBossConfig = config;
+    this._bossState = {
+      isActive: true,
+      bossId: bossId,
+      lastTickTime: 0,
+
+      // 熔岩巨像
+      scorchedCells: [],
+      lastScorchTime: 0,
+      isRageActive: false,
+
+      // 冰霜女巫
+      frozenRows: new Set(),
+      lastFreezeTime: 0,
+      thawMergeCount: 0,
+      isBlizzardActive: false,
+      blizzardEndTime: 0,
+
+      // 混沌之核
+      chaosElements: [],
+      lastWaveTime: 0,
+      lastChaosSpawnTime: 0,
+
+      // 时间吞噬者
+      devourTimer: config.mechanics.timeLimit || 120000,
+      lastDevourTime: 0,
+      timeLimit: config.mechanics.timeLimit || 120000,
+      levelStartTime: Date.now(),
+
+      // 创世之灵
+      sealedBoons: [],
+      mirrors: [],
+      lastUnsealTime: 0,
+      lastMirrorTime: 0,
+      unsealOrder: [],
+    };
+
+    // 创世之灵：封印所有祝福
+    if (bossId === 'boss_creation_spirit' && this.boonSystem) {
+      const allBoons = this.boonSystem.getCurrentBoons ? this.boonSystem.getCurrentBoons() : [];
+      this._bossState.sealedBoons = allBoons.map(b => b.id);
+      this._bossState.unsealOrder = [...this._bossState.sealedBoons];
+    }
+
+    // 通知 UI
+    window.eventBus.emit('boss:init', {
+      id: config.id,
+      name: config.name,
+      icon: config.icon,
+      description: config.description,
+      mechanics: config.mechanics,
+    });
+
+    window.eventBus.emit('notification', {
+      message: `⚔ ${config.icon} ${config.name} 出现了！`,
+      type: 'warning',
+    });
+  }
+
+  /**
+   * Boss 战 tick（每秒检查4次）
+   * @param {number} now - 当前时间戳(ms)
+   */
+  _tickBossMechanics(now) {
+    const config = this._currentBossConfig;
+    if (!config) return;
+
+    switch (config.id) {
+      case 'boss_lava_giant':
+        this._tickLavaGiant(now, config.mechanics);
+        break;
+      case 'boss_ice_witch':
+        this._tickIceWitch(now, config.mechanics);
+        break;
+      case 'boss_chaos_core':
+        this._tickChaosCore(now, config.mechanics);
+        break;
+      case 'boss_time_devourer':
+        this._tickTimeDevourer(now, config.mechanics);
+        break;
+      case 'boss_creation_spirit':
+        this._tickCreationSpirit(now, config.mechanics);
+        break;
+    }
+  }
+
+  // ---------- 熔岩巨像 ----------
+
+  _tickLavaGiant(now, mech) {
+    const state = this._bossState;
+
+    // 1. 灼烧蔓延：每 scorchInterval ms 灼烧一个格子
+    if (now - state.lastScorchTime > (mech.scorchInterval || 15000)) {
+      state.lastScorchTime = now;
+      this._applyScorch(mech.scorchDuration || 5000);
+    }
+
+    // 2. 清理已过期的灼烧格子
+    state.scorchedCells = state.scorchedCells.filter(cell => cell.expireAt > now);
+
+    // 3. 愤怒状态检测：同时灼烧格子数 >= rageThreshold
+    const wasRageActive = state.isRageActive;
+    state.isRageActive = state.scorchedCells.length >= (mech.rageThreshold || 3);
+
+    if (state.isRageActive && !wasRageActive) {
+      window.eventBus.emit('notification', {
+        message: '🔥 熔岩巨像进入愤怒状态！发射器冷却增加 30%',
+        type: 'warning',
+      });
+      window.eventBus.emit('boss:rage-activated', { bossId: 'boss_lava_giant' });
+    } else if (!state.isRageActive && wasRageActive) {
+      window.eventBus.emit('boss:rage-deactivated', { bossId: 'boss_lava_giant' });
+    }
+
+    // 4. 灼烧蔓延：每5秒有概率将灼烧扩散到相邻格子
+    if (state.scorchedCells.length > 0 && Math.random() < (mech.spreadChance || 0.4)) {
+      this._spreadScorch(mech.scorchDuration || 5000);
+    }
+  }
+
+  /** 灼烧一个随机格子 */
+  _applyScorch(duration) {
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    const state = this._bossState;
+
+    // 找到未被灼烧的格子
+    const scorchedSet = new Set(state.scorchedCells.map(c => `${c.row},${c.col}`));
+    const available = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!scorchedSet.has(`${r},${c}`)) {
+          available.push({ row: r, col: c });
+        }
+      }
+    }
+
+    if (available.length === 0) return;
+
+    const target = available[Math.floor(Math.random() * available.length)];
+    state.scorchedCells.push({
+      row: target.row,
+      col: target.col,
+      expireAt: Date.now() + duration,
+    });
+
+    // 如果格子上有元素，清除它
+    if (board[target.row][target.col] && !board[target.row][target.col]._blocked) {
+      this.systems.spawn.removeElement(board, board[target.row][target.col]);
+      this.boardRenderer.updateCell(board, target.row, target.col);
+    }
+
+    window.eventBus.emit('boss:scorch-cell', { row: target.row, col: target.col, duration });
+  }
+
+  /** 灼烧蔓延到相邻格子 */
+  _spreadScorch(duration) {
+    const state = this._bossState;
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    const scorchedSet = new Set(state.scorchedCells.map(c => `${c.row},${c.col}`));
+
+    // 收集所有被灼烧格子的相邻格子
+    const neighbors = [];
+    for (const cell of state.scorchedCells) {
+      const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+      for (const [dr, dc] of dirs) {
+        const nr = cell.row + dr;
+        const nc = cell.col + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !scorchedSet.has(`${nr},${nc}`)) {
+          neighbors.push({ row: nr, col: nc });
+          scorchedSet.add(`${nr},${nc}`);
+        }
+      }
+    }
+
+    if (neighbors.length === 0) return;
+
+    const target = neighbors[Math.floor(Math.random() * neighbors.length)];
+    state.scorchedCells.push({
+      row: target.row,
+      col: target.col,
+      expireAt: Date.now() + duration,
+    });
+
+    if (board[target.row][target.col] && !board[target.row][target.col]._blocked) {
+      this.systems.spawn.removeElement(board, board[target.row][target.col]);
+      this.boardRenderer.updateCell(board, target.row, target.col);
+    }
+
+    window.eventBus.emit('boss:scorch-cell', { row: target.row, col: target.col, duration });
+  }
+
+  /** 合成灭火（由 _executeMerge 调用） */
+  _extinguishOnMerge(row, col) {
+    const state = this._bossState;
+    const idx = state.scorchedCells.findIndex(c => c.row === row && c.col === col);
+    if (idx !== -1) {
+      state.scorchedCells.splice(idx, 1);
+      window.eventBus.emit('boss:extinguish-cell', { row, col });
+      return true;
+    }
+    return false;
+  }
+
+  /** 检查格子是否被灼烧 */
+  _isCellScorched(row, col) {
+    return this._bossState.scorchedCells.some(c => c.row === row && c.col === col);
+  }
+
+  /** 获取发射器冷却惩罚倍率（愤怒状态） */
+  getEmitterCooldownMultiplier() {
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant' && this._bossState.isRageActive) {
+      return this._currentBossConfig.mechanics.rageCooldownPenalty || 1.3;
+    }
+    return 1.0;
+  }
+
+  // ---------- 冰霜女巫 ----------
+
+  _tickIceWitch(now, mech) {
+    const state = this._bossState;
+    const board = this.state.board;
+    const rows = board.length;
+
+    // 1. 暴风雪结束恢复
+    if (state.isBlizzardActive && now > state.blizzardEndTime) {
+      state.isBlizzardActive = false;
+      window.eventBus.emit('boss:blizzard-ended', {});
+      window.eventBus.emit('notification', {
+        message: '❄ 暴风雪结束了！',
+        type: 'info',
+      });
+    }
+
+    // 2. 冻结行：每 freezeInterval ms 冻结一行
+    if (now - state.lastFreezeTime > (mech.freezeInterval || 20000)) {
+      state.lastFreezeTime = now;
+      this._freezeRandomRow(mech.freezeDuration || 8000);
+    }
+
+    // 3. 暴风雪触发：同时冻结行数 >= blizzardThreshold
+    if (state.frozenRows.size >= (mech.blizzardThreshold || 2) && !state.isBlizzardActive) {
+      state.isBlizzardActive = true;
+      state.blizzardEndTime = now + (mech.blizzardPauseDuration || 5000);
+      window.eventBus.emit('boss:blizzard-started', { duration: mech.blizzardPauseDuration || 5000 });
+      window.eventBus.emit('notification', {
+        message: '❄ 冰霜女巫释放了暴风雪！所有发射器暂停 5 秒',
+        type: 'warning',
+      });
+    }
+  }
+
+  /** 冻结一行 */
+  _freezeRandomRow(duration) {
+    const board = this.state.board;
+    const rows = board.length;
+    const state = this._bossState;
+
+    // 找未被冻结的行
+    const available = [];
+    for (let r = 0; r < rows; r++) {
+      if (!state.frozenRows.has(r)) {
+        available.push(r);
+      }
+    }
+
+    if (available.length === 0) return;
+
+    const row = available[Math.floor(Math.random() * available.length)];
+    state.frozenRows.add(row);
+
+    // 冻结该行的所有元素（视觉标记）
+    for (let c = 0; c < board[row].length; c++) {
+      if (board[row][c]) {
+        this.boardRenderer.updateCell(board, row, c);
+      }
+    }
+
+    window.eventBus.emit('boss:freeze-row', { row, duration });
+  }
+
+  /** 解冻进度更新（由 _executeMerge 调用） */
+  _updateThawProgress(row) {
+    const state = this._bossState;
+    if (!state.frozenRows.has(row)) return false;
+
+    state.thawMergeCount++;
+    const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
+
+    if (state.thawMergeCount >= needed) {
+      state.frozenRows.delete(row);
+      state.thawMergeCount = 0;
+      window.eventBus.emit('boss:thaw-row', { row });
+      return true;
+    }
+    return false;
+  }
+
+  /** 检查某行是否被冻结 */
+  _isRowFrozen(row) {
+    return this._bossState.frozenRows.has(row);
+  }
+
+  // ---------- 混沌之核 ----------
+
+  _tickChaosCore(now, mech) {
+    const state = this._bossState;
+
+    // 1. 混沌波动：每 waveInterval ms 刷新订单并随机改变等级
+    if (now - state.lastWaveTime > (mech.waveInterval || 25000)) {
+      state.lastWaveTime = now;
+      this._triggerChaosWave(mech.waveLevelRange || 1);
+    }
+
+    // 2. 混沌元素生成：每 chaosSpawnInterval ms 在棋盘上生成混沌元素
+    if (now - state.lastChaosSpawnTime > (mech.chaosSpawnInterval || 10000)) {
+      state.lastChaosSpawnTime = now;
+      this._spawnChaosElement();
+    }
+  }
+
+  /** 混沌波动：刷新订单并随机改变等级 */
+  _triggerChaosWave(levelRange) {
+    const orders = this.systems.order.getOrders();
+    if (!orders || orders.length === 0) return;
+
+    for (const order of orders) {
+      // 随机改变订单需求等级 ±levelRange
+      const delta = Math.floor(Math.random() * (levelRange * 2 + 1)) - levelRange;
+      order.level = Math.max(1, Math.min(8, (order.level || 1) + delta));
+    }
+
+    // 刷新订单显示
+    window.eventBus.emit('orders:updated', orders);
+    window.eventBus.emit('boss:chaos-wave', { levelRange });
+    window.eventBus.emit('notification', {
+      message: '🌀 混沌波动！订单需求等级发生了变化',
+      type: 'warning',
+    });
+  }
+
+  /** 生成混沌元素 */
+  _spawnChaosElement() {
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    const state = this._bossState;
+
+    // 找空位
+    const emptyCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!board[r][c]) {
+          emptyCells.push({ row: r, col: c });
+        }
+      }
+    }
+
+    if (emptyCells.length === 0) return;
+
+    const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const randomLevel = Math.floor(Math.random() * 3) + 1;
+
+    const chaosEl = {
+      id: `chaos_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      level: randomLevel,
+      icon: '❓',
+      isChaos: true,
+    };
+
+    board[target.row][target.col] = chaosEl;
+    this.boardRenderer.updateCell(board, target.row, target.col);
+
+    state.chaosElements.push({
+      row: target.row,
+      col: target.col,
+      level: randomLevel,
+      icon: '❓',
+    });
+
+    window.eventBus.emit('boss:chaos-spawn', { row: target.row, col: target.col, level: randomLevel });
+  }
+
+  // ---------- 时间吞噬者 ----------
+
+  _tickTimeDevourer(now, mech) {
+    const state = this._bossState;
+
+    // 1. 吞噬倒计时递减
+    const elapsed = now - (state.lastDevourTime || state.levelStartTime);
+    if (elapsed > 200) {
+      state.devourTimer -= elapsed;
+      state.lastDevourTime = now;
+
+      // 通知 UI 更新时间
+      window.eventBus.emit('boss:devour-timer', { remaining: state.devourTimer });
+    }
+
+    // 2. 时间耗尽 → 强制失败
+    if (state.devourTimer <= 0) {
+      this._onBossDefeat('时间耗尽！时间吞噬者吞噬了一切');
+      return;
+    }
+
+    // 3. 列吞噬：每 devourInterval ms 吞噬一列
+    if (now - state.lastDevourTime > (mech.devourInterval || 12000)) {
+      state.lastDevourTime = now;
+      this._devourColumn();
+    }
+  }
+
+  /** 吞噬一列 */
+  _devourColumn() {
+    const board = this.state.board;
+    const cols = board[0].length;
+    const col = Math.floor(Math.random() * cols);
+
+    // 清除该列所有元素
+    for (let r = 0; r < board.length; r++) {
+      if (board[r][col]) {
+        this.systems.spawn.removeElement(board, board[r][col]);
+        board[r][col] = null;
+        this.boardRenderer.updateCell(board, r, col);
+      }
+    }
+
+    window.eventBus.emit('boss:devour-column', { col });
+    window.eventBus.emit('notification', {
+      message: `⏳ 时间吞噬者吞噬了第 ${col + 1} 列！`,
+      type: 'warning',
+    });
+  }
+
+  /** 提交订单延缓吞噬（由 _onOrderClicked 调用） */
+  _delayDevour() {
+    const state = this._bossState;
+    if (state.bossId !== 'boss_time_devourer') return;
+
+    const delay = this._currentBossConfig.mechanics.orderDelay || 3000;
+    state.devourTimer += delay;
+    window.eventBus.emit('boss:devour-delayed', { delay });
+  }
+
+  // ---------- 创世之灵 ----------
+
+  _tickCreationSpirit(now, mech) {
+    const state = this._bossState;
+
+    // 1. 祝福解封：每 unsealInterval ms 解封一个祝福
+    if (state.unsealOrder.length > 0 && now - state.lastUnsealTime > (mech.unsealInterval || 30000)) {
+      state.lastUnsealTime = now;
+      this._unsealNextBoon();
+    }
+
+    // 2. 镜像召唤：每 mirrorInterval ms 召唤一个镜像
+    if (now - state.lastMirrorTime > (mech.mirrorInterval || 20000)) {
+      state.lastMirrorTime = now;
+      this._summonMirror(mech.mirrorDuration || 6000);
+    }
+
+    // 3. 清理过期镜像
+    state.mirrors = state.mirrors.filter(m => m.expireAt > now);
+  }
+
+  /** 解封下一个祝福 */
+  _unsealNextBoon() {
+    const state = this._bossState;
+    if (state.unsealOrder.length === 0) return;
+
+    const boonId = state.unsealOrder.shift();
+    state.sealedBoons = state.sealedBoons.filter(id => id !== boonId);
+
+    window.eventBus.emit('boss:boon-unsealed', { boonId });
+    window.eventBus.emit('notification', {
+      message: `🌟 一个祝福被解封了！`,
+      type: 'info',
+    });
+  }
+
+  /** 召唤混沌镜像 */
+  _summonMirror(duration) {
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    const state = this._bossState;
+
+    // 找空位
+    const emptyCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!board[r][c]) {
+          emptyCells.push({ row: r, col: c });
+        }
+      }
+    }
+
+    if (emptyCells.length === 0) return;
+
+    const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+
+    // 镜像会复制棋盘上最高等级的元素外观
+    let maxLevel = 1;
+    let maxIcon = '✨';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (board[r][c] && board[r][c].level > maxLevel) {
+          maxLevel = board[r][c].level;
+          maxIcon = board[r][c].icon || '✨';
+        }
+      }
+    }
+
+    const mirrorEl = {
+      id: `mirror_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      level: maxLevel,
+      icon: maxIcon,
+      isMirror: true,
+      expireAt: Date.now() + duration,
+    };
+
+    board[target.row][target.col] = mirrorEl;
+    this.boardRenderer.updateCell(board, target.row, target.col);
+
+    state.mirrors.push({
+      row: target.row,
+      col: target.col,
+      expireAt: Date.now() + duration,
+    });
+
+    window.eventBus.emit('boss:mirror-summoned', { row: target.row, col: target.col, level: maxLevel });
+  }
+
+  /** 检查元素是否为镜像 */
+  _isMirrorElement(element) {
+    return element && element.isMirror === true;
+  }
+
+  /** 检查祝福是否被封存 */
+  _isBoonSealed(boonId) {
+    return this._bossState.sealedBoons.includes(boonId);
+  }
+
+  /** Boss 战失败处理 */
+  _onBossDefeat(reason) {
+    this.state.isPlaying = false;
+    window.eventBus.emit('boss:defeated', { reason });
+    window.eventBus.emit('notification', {
+      message: `💀 ${reason}`,
+      type: 'error',
+    });
+
+    // 延迟后返回肉鸽地图
+    setTimeout(() => {
+      if (this.rogueSystem) {
+        this.rogueSystem.onNodeFailed(this.currentRogueNode);
+      }
+    }, 2000);
+  }
+
+  /** Boss 战胜利处理 */
+  _onBossVictory() {
+    this._bossState.isActive = false;
+    window.eventBus.emit('boss:victory', {
+      bossId: this._currentBossConfig?.id,
+      bossName: this._currentBossConfig?.name,
+    });
+    window.eventBus.emit('notification', {
+      message: `🎉 ${this._currentBossConfig?.icon} ${this._currentBossConfig?.name} 被击败了！`,
+      type: 'success',
+    });
   }
 
   /** 执行自动整理：将同类型同等级的元素移到相邻位置 */
@@ -1317,6 +2113,8 @@ class GameEngine {
       // 有三重奏但不能合成：切换选中到新元素
       this.boardRenderer.selectCell(row, col, this.state.board);
     } else {
+      // 如果选中的或点击的是混沌元素（❓），先转化为随机基础元素
+      this._convertChaosElements(selectedEl, clickedElement);
       const result = this.systems.merge.tryMerge(selectedEl, clickedElement, Date.now());
       if (result) {
         this._executeMerge(result, selected, { row, col });
@@ -1341,6 +2139,17 @@ class GameEngine {
       candidates[1].element,
       thirdElement,
     ];
+
+    // 如果消耗的元素中有混沌元素（❓），先转化为随机基础元素
+    for (const el of consumed) {
+      if (el && el.isChaos) {
+        const typeKeys = Object.keys(ELEMENT_TYPES);
+        const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+        el.typeId = randomType;
+        el.isChaos = false;
+        el.icon = ELEMENT_TYPES[randomType].icon;
+      }
+    }
 
     const newLevel = consumed[0].level + 2;
     if (newLevel > ELEMENT_LEVELS.length) {
@@ -1405,6 +2214,43 @@ class GameEngine {
       type: 'merge',
     });
 
+    // ==================== 元素连锁反应检测（三合一） ====================
+    if (this.isRogueMode) {
+      const _now3 = Date.now();
+      if (_now3 - this._chainReactionState.lastMergeTime < 2000) {
+        this._chainReactionState.consecutiveCount++;
+      } else {
+        this._chainReactionState.consecutiveCount = 1;
+        this._chainReactionState.isStormActive = false;
+      }
+      this._chainReactionState.lastMergeTime = _now3;
+
+      const chainCount3 = this._chainReactionState.consecutiveCount;
+
+      // 三合一的连锁特效阈值降低：第2次即触发全屏闪烁
+      if (chainCount3 >= 5 && !this._chainReactionState.isStormActive) {
+        this._triggerChainStorm();
+      } else if (chainCount3 >= 2) {
+        this.boardRenderer._createFlashOverlay('flash-white');
+        this.boardRenderer._applyScreenShake(6, 0.15);
+        window.eventBus.emit('notification', {
+          message: `⛓ 三重连锁！x${chainCount3}`,
+          type: 'milestone',
+        });
+      }
+
+      window.eventBus.emit('chain-reaction:updated', {
+        count: chainCount3,
+        isStorm: this._chainReactionState.isStormActive,
+      });
+    }
+    // ==================== 连锁检测结束 ====================
+
+    // === 怒气获取：三合一 +15 ===
+    if (this.isRogueMode) {
+      this._addRage(15);
+    }
+
     // === 肉鸽祝福：连锁反应 ===
     if (this.boonSystem && this.boonSystem.hasBoon('boon_chain_reaction') && Math.random() < 0.25) {
       const lowerLevel = Math.max(1, newLevel - 1);
@@ -1433,6 +2279,17 @@ class GameEngine {
   /** 执行合成操作 */
   _executeMerge(result, fromPos, toPos) {
     const { merged, consumed, comboCount, comboMultiplier } = result;
+
+    // 如果消耗的元素中有混沌元素（❓），先转化为随机基础元素
+    for (const el of consumed) {
+      if (el && el.isChaos) {
+        const typeKeys = Object.keys(ELEMENT_TYPES);
+        const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+        el.typeId = randomType;
+        el.isChaos = false;
+        el.icon = ELEMENT_TYPES[randomType].icon;
+      }
+    }
 
     // 从棋盘移除被消耗的两个元素
     for (const el of consumed) {
@@ -1468,10 +2325,98 @@ class GameEngine {
     this._comboTimeoutId = setTimeout(() => {
       this._comboTimeoutId = null;
       this.systems.merge.resetCombo();
+      // 连锁反应中断时重置状态
+      if (this.isRogueMode) {
+        this._chainReactionState.consecutiveCount = 0;
+        this._chainReactionState.isStormActive = false;
+      }
       window.eventBus.emit('combo:break', {});
       // 连击中断是触发紧急事件的好时机
       this._checkEmergencyEvents();
     }, this.systems.merge.COMBO_WINDOW_MS);
+
+    // ==================== 元素连锁反应检测 ====================
+    if (this.isRogueMode) {
+      const _now = Date.now();
+      if (_now - this._chainReactionState.lastMergeTime < 2000) {
+        this._chainReactionState.consecutiveCount++;
+      } else {
+        this._chainReactionState.consecutiveCount = 1;
+        this._chainReactionState.isStormActive = false;
+      }
+      this._chainReactionState.lastMergeTime = _now;
+
+      const chainCount = this._chainReactionState.consecutiveCount;
+
+      // 根据连续次数触发不同级别的连锁特效
+      if (chainCount >= 5 && !this._chainReactionState.isStormActive) {
+        // 第五次及以上：合成风暴 —— 自动合成棋盘上所有可合成的相邻元素
+        this._triggerChainStorm();
+      } else if (chainCount >= 3) {
+        // 第三次及以上：全屏闪烁 + 屏幕震动
+        this.boardRenderer._createFlashOverlay('flash-white');
+        this.boardRenderer._applyScreenShake(8, 0.25);
+        window.eventBus.emit('notification', {
+          message: `⛓ ${chainCount}连击连锁！`,
+          type: 'milestone',
+        });
+      } else if (chainCount === 2) {
+        // 第二次：增强特效（50%更多粒子）
+        const typeCfg = ELEMENT_TYPES[merged.typeId || merged.elementType];
+        this.boardRenderer._emitMergeParticles(
+          toPos.row, toPos.col,
+          typeCfg?.color || '#ffffff',
+          18  // 比正常多50%
+        );
+        window.eventBus.emit('notification', {
+          message: `⛓ 连锁！x${chainCount}`,
+          type: 'merge',
+        });
+      }
+
+      // 发射连锁反应事件（供 UI 层消费）
+      window.eventBus.emit('chain-reaction:updated', {
+        count: chainCount,
+        isStorm: this._chainReactionState.isStormActive,
+      });
+    }
+
+    // ==================== 连锁检测结束 ====================
+
+    // === Boss 机制：熔岩巨像 - 合成灭火 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
+      const extinguished = this._extinguishOnMerge(toPos.row, toPos.col);
+      // 如果目标位置是灼烧格子，额外通知
+      if (extinguished) {
+        window.eventBus.emit('notification', {
+          message: '🔥 合成扑灭了灼烧！',
+          type: 'merge',
+        });
+      }
+      // 也检查消耗元素的来源位置
+      this._extinguishOnMerge(fromPos.row, fromPos.col);
+    }
+
+    // === Boss 机制：冰霜女巫 - 合成解冻 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_ice_witch') {
+      if (this._isRowFrozen(toPos.row)) {
+        const thawed = this._updateThawProgress(toPos.row);
+        if (thawed) {
+          window.eventBus.emit('notification', {
+            message: '❄ 冻结的行被合成解冻了！',
+            type: 'merge',
+          });
+        }
+      }
+    }
+
+    // === 怒气获取：合成 +8，Lv.4+ +15，连击加成 ===
+    if (this.isRogueMode) {
+      let rageGain = 8;
+      if (merged.level >= 4) rageGain = 15;
+      rageGain += Math.min(comboCount, 5) * 3; // 连击每层+3，上限+15
+      this._addRage(rageGain);
+    }
 
     // 通知合成事件
     window.eventBus.emit('notification', {
@@ -1599,6 +2544,471 @@ class GameEngine {
     }, 5000);
   }
 
+  // ==================== 元素连锁反应：合成风暴 ====================
+
+  /**
+   * 触发合成风暴：自动扫描并合成棋盘上所有可合成的相邻元素对
+   * 每次调用只执行一轮扫描，避免无限循环
+   */
+  _triggerChainStorm() {
+    if (this._chainReactionState.isStormActive) return;
+    this._chainReactionState.isStormActive = true;
+
+    window.eventBus.emit('notification', {
+      message: '🌀 合成风暴！自动合成所有可合并元素！',
+      type: 'milestone',
+    });
+
+    // 全屏金色闪烁 + 强震
+    this.boardRenderer._createFlashOverlay('flash-gold');
+    this.boardRenderer._applyScreenShake(10, 0.35);
+
+    // 执行一轮扫描合并（最多执行3轮，防止死循环）
+    let totalMerges = 0;
+    const maxRounds = 3;
+
+    for (let round = 0; round < maxRounds; round++) {
+      const pairs = this._findAllMergeablePairs();
+      if (pairs.length === 0) break;
+
+      let mergedThisRound = 0;
+      for (const pair of pairs) {
+        const { row1, col1, row2, col2 } = pair;
+        const el1 = this.state.board[row1][col1];
+        const el2 = this.state.board[row2][col2];
+        if (!el1 || !el2) continue;
+
+        // 再次确认可合成（防止上一轮已消耗）
+        if (!Element.canMerge(el1, el2)) continue;
+
+        const result = this.systems.merge.tryMerge(el1, el2, Date.now());
+        if (!result) continue;
+
+        const { merged, consumed } = result;
+
+        // 从棋盘移除被消耗的两个元素
+        for (const el of consumed) {
+          this.systems.spawn.removeElement(this.state.board, el);
+        }
+
+        // 放置合成后的新元素（放在第二个位置）
+        this.systems.spawn.placeElement(this.state.board, merged, row2, col2);
+
+        // 更新UI
+        this.boardRenderer.updateCell(this.state.board, row1, col1);
+        this.boardRenderer.updateCell(this.state.board, row2, col2);
+        this.boardRenderer.playMergeAnimation(row1, col1, row2, col2);
+        this.boardRenderer.playMergeEffect(row2, col2, merged.level, merged.typeId || merged.elementType);
+
+        // 计算积分
+        const scoreGain = Math.floor(merged.scoreValue * this._eventCtx.scoreMultiplier);
+        this.state.score += scoreGain;
+
+        // 更新评分数据
+        this._updateRatingData('merge', { level: merged.level });
+        this._totalMergesCount++;
+
+        mergedThisRound++;
+        totalMerges++;
+      }
+
+      if (mergedThisRound === 0) break;
+    }
+
+    // 最终刷新棋盘
+    this.boardRenderer.renderAll(this.state.board);
+
+    window.eventBus.emit('score:updated', {
+      score: this.state.score,
+      targetScore: this.state.targetScore,
+    });
+
+    window.eventBus.emit('notification', {
+      message: `🌀 合成风暴完成！共 ${totalMerges} 次自动合成`,
+      type: 'milestone',
+    });
+
+    // 检查是否达标
+    this._checkScoreComplete();
+    this._checkWaveProgress();
+
+    // 风暴结束后重置状态，允许再次触发
+    setTimeout(() => {
+      this._chainReactionState.isStormActive = false;
+    }, 3000);
+  }
+
+  /**
+   * 查找棋盘上所有可合成的相邻元素对
+   * @returns {Array<{row1:number, col1:number, row2:number, col2:number}>}
+   */
+  _findAllMergeablePairs() {
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    const pairs = [];
+    const visited = new Set();
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const el = board[r][c];
+        if (!el) continue;
+
+        // 检查右邻格
+        if (c + 1 < cols) {
+          const neighbor = board[r][c + 1];
+          if (neighbor && Element.canMerge(el, neighbor)) {
+            const key = `${Math.min(r * cols + c, r * cols + (c + 1))}_${Math.max(r * cols + c, r * cols + (c + 1))}`;
+            if (!visited.has(key)) {
+              visited.add(key);
+              pairs.push({ row1: r, col1: c, row2: r, col2: c + 1 });
+            }
+          }
+        }
+
+        // 检查下邻格
+        if (r + 1 < rows) {
+          const neighbor = board[r + 1][c];
+          if (neighbor && Element.canMerge(el, neighbor)) {
+            const key = `${Math.min(r * cols + c, (r + 1) * cols + c)}_${Math.max(r * cols + c, (r + 1) * cols + c)}`;
+            if (!visited.has(key)) {
+              visited.add(key);
+              pairs.push({ row1: r, col1: c, row2: r + 1, col2: c });
+            }
+          }
+        }
+      }
+    }
+
+    return pairs;
+  }
+
+  // ==================== 怒气/能量条系统 ====================
+
+  /**
+   * 将混沌元素（❓）转化为随机基础元素
+   * 用于合成前处理，确保混沌元素参与合成时产物是正常元素
+   * @param {...Element} elements - 待检查的元素
+   */
+  _convertChaosElements(...elements) {
+    const typeKeys = Object.keys(ELEMENT_TYPES);
+    for (const el of elements) {
+      if (el && el.isChaos) {
+        const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+        el.typeId = randomType;
+        el.isChaos = false;
+        el.icon = ELEMENT_TYPES[randomType].icon;
+      }
+    }
+  }
+
+  /**
+   * 增加怒气值（0-100范围，超100自动溢出）
+   * @param {number} amount - 增加量
+   */
+  _addRage(amount) {
+    if (!this.state.isPlaying) return;
+
+    const oldValue = this._rageValue;
+    this._rageValue = Math.min(100, this._rageValue + amount);
+
+    // 怒气满时通知
+    if (oldValue < 80 && this._rageValue >= 80) {
+      window.eventBus.emit('notification', {
+        message: '⚡ 怒气高涨！怒气已超过 80%',
+        type: 'milestone',
+      });
+    }
+    if (oldValue < 50 && this._rageValue >= 50) {
+      window.eventBus.emit('notification', {
+        message: '🔥 怒气过半！可以释放大招了',
+        type: 'info',
+      });
+    }
+
+    window.eventBus.emit('rage:updated', {
+      value: this._rageValue,
+      max: 100,
+    });
+  }
+
+  /**
+   * 使用大招
+   * @param {string} ultimateId - 大招ID
+   * @returns {boolean} 是否成功释放
+   */
+  useUltimate(ultimateId) {
+    if (!this.state.isPlaying || this.state.isPaused) return false;
+
+    const now = Date.now();
+
+    // 查找大招定义
+    const ult = this._ultimates.find(u => u.id === ultimateId);
+    if (!ult) {
+      window.eventBus.emit('notification', {
+        message: '未知的大招',
+        type: 'warning',
+      });
+      return false;
+    }
+
+    // 检查是否解锁（祝福限制）
+    if (ult.unlockBoon && (!this.boonSystem || !this.boonSystem.hasBoon(ult.unlockBoon))) {
+      window.eventBus.emit('notification', {
+        message: `🔒 ${ult.name} 未解锁（需要对应祝福）`,
+        type: 'warning',
+      });
+      return false;
+    }
+
+    // 检查怒气是否足够
+    if (this._rageValue < ult.rageCost) {
+      window.eventBus.emit('notification', {
+        message: `⚠ 怒气不足！需要 ${ult.rageCost}，当前 ${this._rageValue}`,
+        type: 'warning',
+      });
+      return false;
+    }
+
+    // 检查冷却（每个大招独立冷却）
+    const elapsed = now - (ult.lastUsedTime || 0);
+    if (elapsed < ult.cooldown) {
+      const remaining = Math.ceil((ult.cooldown - elapsed) / 1000);
+      window.eventBus.emit('notification', {
+        message: `⏳ ${ult.name} 冷却中，还需 ${remaining}s`,
+        type: 'warning',
+      });
+      return false;
+    }
+
+    // 扣除怒气
+    this._rageValue = Math.max(0, this._rageValue - ult.rageCost);
+    ult.lastUsedTime = now;
+
+    // 发射大招释放事件
+    window.eventBus.emit('ultimate:used', {
+      id: ult.id,
+      name: ult.name,
+      icon: ult.icon,
+    });
+
+    // 全屏特效：金色闪光 + 震动
+    this.boardRenderer._createFlashOverlay('flash-gold');
+    this.boardRenderer._applyScreenShake(8, 0.3);
+
+    // 执行大招效果
+    ult.effect();
+
+    // 更新怒气UI
+    window.eventBus.emit('rage:updated', {
+      value: this._rageValue,
+      max: 100,
+    });
+
+    window.eventBus.emit('notification', {
+      message: `✨ 释放大招：${ult.icon} ${ult.name}！`,
+      type: 'milestone',
+    });
+
+    return true;
+  }
+
+  /** 大招效果1：清除所有 Lv.1 元素 */
+  _applyUltimateClear() {
+    let count = 0;
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        const el = this.state.board[r][c];
+        if (el && el.level === 1) {
+          this.systems.spawn.removeElement(this.state.board, el);
+          this.boardRenderer.updateCell(this.state.board, r, c);
+          count++;
+        }
+      }
+    }
+    window.eventBus.emit('notification', {
+      message: `💥 元素净化：清除了 ${count} 个 Lv.1 元素`,
+      type: 'reward',
+    });
+  }
+
+  /** 大招效果2：重置所有发射器冷却 */
+  _applyUltimateBoost() {
+    for (const emitter of this.state.emitters) {
+      emitter.resetCooldown();
+    }
+    window.eventBus.emit('emitters:updated', this.state.emitters);
+    window.eventBus.emit('notification', {
+      message: '⚡ 能量爆发：所有发射器已就绪！',
+      type: 'reward',
+    });
+  }
+
+  /** 大招效果3：10秒内得分 x2 */
+  _applyUltimateScoreBoost() {
+    const originalMultiplier = this._eventCtx.scoreMultiplier;
+    this._eventCtx.scoreMultiplier *= 2;
+
+    // 创建视觉提示横幅
+    const banner = document.createElement('div');
+    banner.id = 'score-boost-banner';
+    banner.className = 'score-boost-banner';
+    banner.textContent = '🌟 积分 x2！';
+    document.body.appendChild(banner);
+    void banner.offsetWidth;
+    banner.classList.add('show');
+
+    setTimeout(() => {
+      this._eventCtx.scoreMultiplier = originalMultiplier;
+      banner.classList.remove('show');
+      banner.classList.add('hide');
+      setTimeout(() => {
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+      }, 500);
+      window.eventBus.emit('notification', {
+        message: '积分增幅结束',
+        type: 'info',
+      });
+    }, 10000);
+  }
+
+  /** 大招效果4（祝福解锁）：棋盘上所有元素等级+1 */
+  _applyUltimateMergeUp() {
+    let count = 0;
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        const el = this.state.board[r][c];
+        if (el && el.level < ELEMENT_LEVELS.length) {
+          el.level += 1;
+          this.boardRenderer.updateCell(this.state.board, r, c);
+          count++;
+        }
+      }
+    }
+    window.eventBus.emit('notification', {
+      message: `⬆ 全体升级：${count} 个元素等级+1！`,
+      type: 'reward',
+    });
+  }
+
+  /** 大招效果5（祝福解锁）：在空位随机生成基础元素 */
+  _applyUltimateFillBoard() {
+    let count = 0;
+    const typeKeys = Object.keys(ELEMENT_TYPES);
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        if (!this.state.board[r][c]) {
+          const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+          const el = new Element(randomType, 1);
+          this.systems.spawn.placeElement(this.state.board, el, r, c);
+          this.boardRenderer.updateCell(this.state.board, r, c);
+          this.boardRenderer.playSpawnAnimation(r, c);
+          count++;
+        }
+      }
+    }
+    window.eventBus.emit('notification', {
+      message: `🧩 元素填充：生成了 ${count} 个基础元素`,
+      type: 'reward',
+    });
+  }
+
+  /** 大招效果6（祝福解锁）：15秒内连击倍率固定 x3 */
+  _applyUltimateComboX3() {
+    const originalWindow = this.systems.merge.COMBO_WINDOW_MS;
+    // 修改连击窗口为极大值，确保连击不中断
+    this.systems.merge.COMBO_WINDOW_MS = 99999999;
+
+    const banner = document.createElement('div');
+    banner.id = 'combo-boost-banner';
+    banner.className = 'score-boost-banner combo-boost';
+    banner.textContent = '🌀 连击风暴！固定 x3 倍率';
+    document.body.appendChild(banner);
+    void banner.offsetWidth;
+    banner.classList.add('show');
+
+    setTimeout(() => {
+      this.systems.merge.COMBO_WINDOW_MS = originalWindow;
+      banner.classList.remove('show');
+      banner.classList.add('hide');
+      setTimeout(() => {
+        if (banner.parentNode) banner.parentNode.removeChild(banner);
+      }, 500);
+      window.eventBus.emit('notification', {
+        message: '连击风暴结束',
+        type: 'info',
+      });
+    }, 15000);
+  }
+
+  /** 大招效果7（祝福解锁）：刷新所有订单为高奖励订单 */
+  _applyUltimateOrderRefresh() {
+    const orders = this.systems.order.getOrders();
+    for (const order of orders) {
+      // 提升奖励
+      if (order.reward) {
+        order.reward = Math.floor(order.reward * 1.5);
+      }
+    }
+    window.eventBus.emit('orders:updated', orders);
+    window.eventBus.emit('notification', {
+      message: '📋 订单重置：所有订单奖励提升 50%！',
+      type: 'reward',
+    });
+  }
+
+  /** 大招效果8（祝福解锁）：随机将一对相邻同等级元素合成高两级 */
+  _applyUltimateSuperMerge() {
+    const pairs = this._findAllMergeablePairs();
+    if (pairs.length === 0) {
+      window.eventBus.emit('notification', {
+        message: '没有可合成的相邻元素',
+        type: 'warning',
+      });
+      return;
+    }
+
+    // 选择最高等级的一对进行超级合成
+    pairs.sort((a, b) => {
+      const elA = this.state.board[a.row1][a.col1];
+      const elB = this.state.board[b.row1][b.col1];
+      return (elB ? elB.level : 0) - (elA ? elA.level : 0);
+    });
+
+    const target = pairs[0];
+    const el1 = this.state.board[target.row1][target.col1];
+    const el2 = this.state.board[target.row2][target.col2];
+    if (!el1 || !el2) return;
+
+    // 移除两个元素
+    this.systems.spawn.removeElement(this.state.board, el1);
+    this.systems.spawn.removeElement(this.state.board, el2);
+
+    // 创建高两级的元素
+    const newLevel = Math.min(el1.level + 2, ELEMENT_LEVELS.length);
+    const merged = new Element(el1.typeId || el1.elementType, newLevel);
+    this.systems.spawn.placeElement(this.state.board, merged, target.row2, target.col2);
+
+    // 更新UI
+    this.boardRenderer.updateCell(this.state.board, target.row1, target.col1);
+    this.boardRenderer.updateCell(this.state.board, target.row2, target.col2);
+    this.boardRenderer.playMergeAnimation(target.row1, target.col1, target.row2, target.col2);
+    this.boardRenderer.playMergeEffect(target.row2, target.col2, merged.level, merged.typeId || merged.elementType);
+
+    // 积分
+    const scoreGain = Math.floor(merged.scoreValue * 2);
+    this.state.score += scoreGain;
+    window.eventBus.emit('score:updated', {
+      score: this.state.score,
+      targetScore: this.state.targetScore,
+    });
+
+    window.eventBus.emit('notification', {
+      message: `🔮 超级合成！${el1.icon} → ${merged.icon} Lv.${merged.level}`,
+      type: 'milestone',
+    });
+  }
+
   /** 消耗棋盘上一个随机元素（贪婪代价诅咒） */
   _consumeRandomElement() {
     const occupiedCells = [];
@@ -1612,7 +3022,15 @@ class GameEngine {
 
     if (occupiedCells.length === 0) return;
 
-    const target = occupiedCells[Math.floor(Math.random() * occupiedCells.length)];
+    // 根据贪婪代价阶段，筛选满足最低等级要求的格子
+    const minLevel = this.boonSystem ? this.boonSystem.getGreedMinLevel() : 1;
+    let candidates = occupiedCells.filter(cell => {
+      const el = this.state.board[cell.row][cell.col];
+      return el && el.level >= minLevel;
+    });
+    if (candidates.length === 0) candidates = occupiedCells;
+
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
     const consumedEl = this.state.board[target.row][target.col];
     this.systems.spawn.removeElement(this.state.board, consumedEl);
     this.boardRenderer.updateCell(this.state.board, target.row, target.col);
@@ -1621,6 +3039,82 @@ class GameEngine {
       message: `👹 贪婪代价！消耗了 ${consumedEl.icon} Lv.${consumedEl.level} ${consumedEl.name || ''}`,
       type: 'warning',
     });
+  }
+
+  /** 随机交换棋盘上 N 对元素位置（元素混淆阶段3） */
+  _swapRandomElements(pairs) {
+    const occupiedCells = [];
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        if (this.state.board[r][c]) {
+          occupiedCells.push({ row: r, col: c });
+        }
+      }
+    }
+
+    if (occupiedCells.length < 2) return;
+
+    for (let i = 0; i < pairs && occupiedCells.length >= 2; i++) {
+      const idx1 = Math.floor(Math.random() * occupiedCells.length);
+      const cell1 = occupiedCells.splice(idx1, 1)[0];
+      const idx2 = Math.floor(Math.random() * occupiedCells.length);
+      const cell2 = occupiedCells.splice(idx2, 1)[0];
+
+      // 交换两个格子的元素
+      const temp = this.state.board[cell1.row][cell1.col];
+      this.state.board[cell1.row][cell1.col] = this.state.board[cell2.row][cell2.col];
+      this.state.board[cell2.row][cell2.col] = temp;
+
+      // 更新渲染
+      this.boardRenderer.updateCell(this.state.board, cell1.row, cell1.col);
+      this.boardRenderer.updateCell(this.state.board, cell2.row, cell2.col);
+    }
+  }
+
+  /** 随机封锁棋盘上的格子（脆弱棋盘阶段2/3） */
+  _blockRandomCells(count) {
+    if (!this.boonSystem) return;
+
+    const board = this.state.board;
+    const rows = board.length;
+    const cols = board[0].length;
+
+    const allCells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        allCells.push({ row: r, col: c });
+      }
+    }
+
+    // 移除已被封锁的格子
+    const blocked = this.boonSystem.getBlockedCells();
+    const available = allCells.filter(cell =>
+      !blocked.some(b => b.row === cell.row && b.col === cell.col)
+    );
+
+    const toBlock = [];
+    for (let i = 0; i < count && available.length > 0; i++) {
+      const idx = Math.floor(Math.random() * available.length);
+      toBlock.push(available.splice(idx, 1)[0]);
+    }
+
+    // 封锁格子：清除元素并标记为不可用
+    for (const cell of toBlock) {
+      if (board[cell.row][cell.col]) {
+        this.systems.spawn.removeElement(board, board[cell.row][cell.col]);
+      }
+      board[cell.row][cell.col] = { _blocked: true };
+      this.boardRenderer.updateCell(board, cell.row, cell.col);
+    }
+
+    this.boonSystem.setBlockedCells([...blocked, ...toBlock]);
+
+    if (toBlock.length > 0) {
+      window.eventBus.emit('notification', {
+        message: `💔 脆弱棋盘！${toBlock.length} 个格子被封锁`,
+        type: 'warning',
+      });
+    }
   }
 
   /** 点击订单 */
@@ -1669,9 +3163,26 @@ class GameEngine {
     reward = Math.floor(reward * this._eventCtx.scoreMultiplier);
     this.state.score += reward;
 
-    // === 肉鸽诅咒：贪婪代价 ===
+    // === 怒气获取：提交订单 +12 ===
+    if (this.isRogueMode) {
+      this._addRage(12);
+    }
+
+    // === Boss 机制：时间吞噬者 - 提交订单延缓吞噬 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_time_devourer') {
+      this._delayDevour();
+    }
+
+    // === 肉鸽诅咒：贪婪代价（分阶段） ===
     if (this.boonSystem && this.boonSystem.hasCurse('curse_greed_price')) {
-      this._consumeRandomElement();
+      if (this.boonSystem.shouldConsumeForGreedPrice()) {
+        this._consumeRandomElement();
+      }
+    }
+
+    // === 缓慢生长：阶段3永久累加 ===
+    if (this.boonSystem) {
+      this.boonSystem.onOrderSubmittedForSlowGrowth(this.state.emitters);
     }
 
     // 找出被消耗元素的位置（对比快照中哪些格子变空了）
@@ -1731,6 +3242,13 @@ class GameEngine {
       clearTimeout(this._comboTimeoutId);
       this._comboTimeoutId = null;
     }
+
+    // 重置怒气值
+    this._rageValue = 0;
+    // 重置所有大招冷却
+      if (this._ultimates) {
+        for (const u of this._ultimates) u.lastUsedTime = 0;
+      }
 
     // 计算本关评级
     const rating = this._calculateRating();
@@ -1831,6 +3349,20 @@ class GameEngine {
     this._startAutoSave();
     this.uiManager.hideModal();
 
+    // 创建怒气条（读档恢复时也需要）
+    if (this.isRogueMode) {
+      if (this.uiManager.createRageBar) {
+        this.uiManager.createRageBar(this._ultimates);
+      }
+      // 重置怒气
+      this._rageValue = 0;
+      // 重置所有大招冷却
+      if (this._ultimates) {
+        for (const u of this._ultimates) u.lastUsedTime = 0;
+      }
+      window.eventBus.emit('rage:updated', { value: 0, max: 100 });
+    }
+
     return true;
   }
 
@@ -1884,6 +3416,12 @@ class GameEngine {
       clearTimeout(this._comboTimeoutId);
       this._comboTimeoutId = null;
     }
+    // 重置怒气
+    this._rageValue = 0;
+    // 重置所有大招冷却
+      if (this._ultimates) {
+        for (const u of this._ultimates) u.lastUsedTime = 0;
+      }
     this.state.isPlaying = false;
   }
 }

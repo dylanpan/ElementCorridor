@@ -15,6 +15,10 @@ class UIManager {
     // 横幅队列系统：确保多个横幅依次显示，不冲突
     this._bannerQueue = [];
     this._isBannerShowing = false;
+    // 怒气/大招系统状态
+    this._rageValue = 0;
+    this._isUltimatePanelOpen = false;
+    this._ultimates = []; // 从 GameEngine 同步
   }
 
   /**
@@ -165,6 +169,70 @@ class UIManager {
       this.showRatingPanel(data);
     });
 
+    // === 怒气/大招系统事件 ===
+    window.eventBus.on('rage:updated', (data) => {
+      this.updateRageBar(data.value, data.max);
+    });
+    window.eventBus.on('ultimate:used', (data) => {
+      this._onUltimateUsed(data);
+    });
+
+    // === Boss 战事件 ===
+    window.eventBus.on('boss:init', (data) => {
+      this._onBossInit(data);
+    });
+    window.eventBus.on('boss:scorch-cell', (data) => {
+      this._onBossScorchCell(data);
+    });
+    window.eventBus.on('boss:extinguish-cell', (data) => {
+      this._onBossExtinguishCell(data);
+    });
+    window.eventBus.on('boss:rage-activated', () => {
+      this._onBossRageActivated();
+    });
+    window.eventBus.on('boss:rage-deactivated', () => {
+      this._onBossRageDeactivated();
+    });
+    window.eventBus.on('boss:freeze-row', (data) => {
+      this._onBossFreezeRow(data);
+    });
+    window.eventBus.on('boss:thaw-row', (data) => {
+      this._onBossThawRow(data);
+    });
+    window.eventBus.on('boss:blizzard-started', (data) => {
+      this._onBossBlizzardStarted(data);
+    });
+    window.eventBus.on('boss:blizzard-ended', () => {
+      this._onBossBlizzardEnded();
+    });
+    window.eventBus.on('boss:chaos-wave', (data) => {
+      this._onBossChaosWave(data);
+    });
+    window.eventBus.on('boss:chaos-spawn', (data) => {
+      this._onBossChaosSpawn(data);
+    });
+    window.eventBus.on('boss:devour-timer', (data) => {
+      this._onBossDevourTimer(data);
+    });
+    window.eventBus.on('boss:devour-column', (data) => {
+      this._onBossDevourColumn(data);
+    });
+    window.eventBus.on('boss:devour-delayed', (data) => {
+      this._onBossDevourDelayed(data);
+    });
+    window.eventBus.on('boss:mirror-summoned', (data) => {
+      this._onBossMirrorSummoned(data);
+    });
+    window.eventBus.on('boss:boon-unsealed', (data) => {
+      this._onBossBoonUnsealed(data);
+    });
+    window.eventBus.on('boss:victory', (data) => {
+      this._onBossVictory(data);
+    });
+    window.eventBus.on('boss:defeated', (data) => {
+      this._onBossDefeated(data);
+    });
+
     // 按钮回调已由 showRatingPanel 直接处理，无需独立事件
   }
 
@@ -285,6 +353,14 @@ class UIManager {
     if (!btnData) return;
 
     const btn = btnData.element;
+
+    // 立即重置冷却进度条（移除过渡动画，避免从100%平滑收缩的视觉延迟）
+    if (btnData.cooldownBar) {
+      btnData.cooldownBar.style.transition = 'none';
+      btnData.cooldownBar.style.width = '0%';
+      void btnData.cooldownBar.offsetWidth; // 强制重排
+      btnData.cooldownBar.style.transition = 'width 0.15s linear, background 0.25s ease';
+    }
 
     // 按压动画
     btn.classList.remove('emitter-btn-press');
@@ -1344,6 +1420,655 @@ class UIManager {
       this.setModalButtonCallback(() => {
         window.eventBus.emit('ui:start-level', nextLv);
       });
+    }
+  }
+
+  // ==================== 怒气/大招系统 UI ====================
+
+  /**
+   * 创建怒气条（右侧竖直半透明条）
+   * @param {Array} ultimates - 大招池定义
+   */
+  createRageBar(ultimates) {
+    console.log('[UIManager] createRageBar called, ultimates count:', ultimates ? ultimates.length : 0);
+    this._ultimates = ultimates || [];
+
+    // 移除旧怒气条
+    const oldBar = document.getElementById('rage-bar-container');
+    if (oldBar && oldBar.parentNode) oldBar.parentNode.removeChild(oldBar);
+
+    const container = document.createElement('div');
+    container.id = 'rage-bar-container';
+    container.className = 'rage-bar-container';
+
+    // 标题
+    const title = document.createElement('div');
+    title.className = 'rage-bar-title';
+    title.textContent = '⚡ 怒气';
+    container.appendChild(title);
+
+    // 竖直条
+    const barTrack = document.createElement('div');
+    barTrack.className = 'rage-bar-track';
+
+    const barFill = document.createElement('div');
+    barFill.id = 'rage-bar-fill';
+    barFill.className = 'rage-bar-fill';
+    barFill.style.height = '0%';
+    barTrack.appendChild(barFill);
+
+    container.appendChild(barTrack);
+
+    // 数值显示
+    const valueDisplay = document.createElement('div');
+    valueDisplay.id = 'rage-value-display';
+    valueDisplay.className = 'rage-value-display';
+    valueDisplay.textContent = '0';
+    container.appendChild(valueDisplay);
+
+    // 大招按钮（点击展开面板）
+    const ultBtn = document.createElement('button');
+    ultBtn.id = 'ultimate-btn';
+    ultBtn.className = 'ultimate-btn';
+    ultBtn.title = '释放大招';
+    ultBtn.textContent = '🔥';
+    ultBtn.addEventListener('click', () => this._toggleUltimatePanel());
+    container.appendChild(ultBtn);
+
+    document.body.appendChild(container);
+  }
+
+  /**
+   * 更新怒气条
+   * @param {number} value - 当前怒气值
+   * @param {number} max - 最大值
+   */
+  updateRageBar(value, max) {
+    this._rageValue = value;
+    const fill = document.getElementById('rage-bar-fill');
+    const display = document.getElementById('rage-value-display');
+    const btn = document.getElementById('ultimate-btn');
+
+    if (!fill || !display) return;
+
+    const pct = Math.min((value / max) * 100, 100);
+    fill.style.height = `${pct}%`;
+
+    // 颜色随怒气变化：蓝→紫→红→金
+    if (pct < 30) {
+      fill.style.background = 'linear-gradient(to top, #2196f3, #42a5f5)';
+    } else if (pct < 60) {
+      fill.style.background = 'linear-gradient(to top, #9c27b0, #ab47bc)';
+    } else if (pct < 80) {
+      fill.style.background = 'linear-gradient(to top, #f44336, #ef5350)';
+    } else {
+      fill.style.background = 'linear-gradient(to top, #ff9800, #ffd700)';
+      fill.classList.add('rage-bar-pulsing');
+    }
+
+    if (pct < 80) {
+      fill.classList.remove('rage-bar-pulsing');
+    }
+
+    display.textContent = `${Math.floor(value)}`;
+
+    // 怒气满时按钮发光
+    if (btn) {
+      if (value >= 80) {
+        btn.classList.add('ultimate-btn-ready');
+      } else {
+        btn.classList.remove('ultimate-btn-ready');
+      }
+    }
+  }
+
+  /** 切换大招选择面板显示/隐藏 */
+  _toggleUltimatePanel() {
+    if (this._isUltimatePanelOpen) {
+      this._hideUltimatePanel();
+    } else {
+      this._showUltimatePanel();
+    }
+  }
+
+  /** 显示大招选择面板 */
+  _showUltimatePanel() {
+    const existing = document.getElementById('ultimate-panel');
+    if (existing) {
+      existing.style.display = 'flex';
+      this._isUltimatePanelOpen = true;
+      return;
+    }
+
+    const panel = document.createElement('div');
+    panel.id = 'ultimate-panel';
+    panel.className = 'ultimate-panel';
+
+    // 标题栏
+    const header = document.createElement('div');
+    header.className = 'ultimate-panel-header';
+    header.innerHTML = '<span>🔥 大招选择</span><span class="ultimate-panel-close" id="ultimate-panel-close">✕</span>';
+    panel.appendChild(header);
+
+    // 大招列表
+    const list = document.createElement('div');
+    list.className = 'ultimate-list';
+
+    for (const ult of this._ultimates) {
+      const card = document.createElement('div');
+      card.className = 'ultimate-card';
+      card.dataset.ultId = ult.id;
+
+      // 检查是否解锁
+      const isLocked = ult.unlockBoon && !window.gameEngine?.boonSystem?.hasBoon(ult.unlockBoon);
+      if (isLocked) card.classList.add('ultimate-card-locked');
+
+      // 检查怒气是否足够
+      const hasRage = this._rageValue >= ult.rageCost;
+      if (!hasRage && !isLocked) card.classList.add('ultimate-card-no-rage');
+
+      // 计算冷却状态
+      const now = Date.now();
+      const elapsed = now - (ult.lastUsedTime || 0);
+      const isOnCooldown = !isLocked && elapsed < ult.cooldown;
+      const cooldownPct = isOnCooldown ? Math.round((elapsed / ult.cooldown) * 100) : 100;
+
+      card.innerHTML = `
+        <div class="ultimate-cooldown-bar">
+          <div class="ultimate-cooldown-fill" style="width:${cooldownPct}%"></div>
+        </div>
+        <div class="ultimate-card-icon">${ult.icon}</div>
+        <div class="ultimate-card-info">
+          <div class="ultimate-card-name">${ult.name}</div>
+          <div class="ultimate-card-desc">${ult.desc}</div>
+          <div class="ultimate-card-cost">
+            ${isLocked ? '🔒 未解锁' : isOnCooldown ? `⏳ 冷却中 ${Math.ceil((ult.cooldown - elapsed) / 1000)}s` : `⚡ ${ult.rageCost} 怒气`}
+          </div>
+        </div>
+      `;
+
+      if (!isLocked && !isOnCooldown) {
+        card.addEventListener('click', () => {
+          if (window.gameEngine && window.gameEngine.useUltimate) {
+            const success = window.gameEngine.useUltimate(ult.id);
+            if (success) this._hideUltimatePanel();
+          }
+        });
+      }
+
+      list.appendChild(card);
+    }
+
+    panel.appendChild(list);
+    document.body.appendChild(panel);
+
+    // 启动大招冷却定时更新
+    this._ultimateCdInterval = setInterval(() => {
+      this._updateUltimateCooldowns();
+    }, 200);
+
+    // 关闭按钮
+    const closeBtn = document.getElementById('ultimate-panel-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this._hideUltimatePanel());
+    }
+
+    // 点击外部关闭
+    setTimeout(() => {
+      document.addEventListener('click', this._boundClosePanel = (e) => {
+        if (!panel.contains(e.target) && e.target.id !== 'ultimate-btn') {
+          this._hideUltimatePanel();
+        }
+      });
+    }, 0);
+
+    void panel.offsetWidth;
+    panel.classList.add('show');
+    this._isUltimatePanelOpen = true;
+  }
+
+  /** 隐藏大招选择面板 */
+  _hideUltimatePanel() {
+    // 清除冷却定时器
+    if (this._ultimateCdInterval) {
+      clearInterval(this._ultimateCdInterval);
+      this._ultimateCdInterval = null;
+    }
+    const panel = document.getElementById('ultimate-panel');
+    if (panel) {
+      panel.classList.remove('show');
+      panel.classList.add('hide');
+      setTimeout(() => {
+        if (panel.parentNode) panel.parentNode.removeChild(panel);
+      }, 300);
+    }
+    if (this._boundClosePanel) {
+      document.removeEventListener('click', this._boundClosePanel);
+      this._boundClosePanel = null;
+    }
+    this._isUltimatePanelOpen = false;
+  }
+
+  /** 更新大招冷却进度条 */
+  _updateUltimateCooldowns() {
+    const panel = document.getElementById('ultimate-panel');
+    if (!panel || !window.gameEngine) return;
+    const now = Date.now();
+    const cards = panel.querySelectorAll('.ultimate-card');
+    for (const card of cards) {
+      const ultId = card.dataset.ultId;
+      const ult = window.gameEngine._ultimates.find(u => u.id === ultId);
+      if (!ult) continue;
+
+      const isLocked = ult.unlockBoon && !window.gameEngine?.boonSystem?.hasBoon(ult.unlockBoon);
+      if (isLocked) continue;
+
+      const elapsed = now - (ult.lastUsedTime || 0);
+      const isOnCooldown = elapsed < ult.cooldown;
+
+      // 更新进度条
+      const fill = card.querySelector('.ultimate-cooldown-fill');
+      if (fill) {
+        const pct = isOnCooldown ? Math.round((elapsed / ult.cooldown) * 100) : 100;
+        fill.style.width = `${pct}%`;
+        fill.style.background = isOnCooldown ? 'linear-gradient(90deg, #ef5350, #ff7043)' : 'linear-gradient(90deg, #66bb6a, #43a047)';
+      }
+
+      // 更新状态文字和点击行为
+      const costEl = card.querySelector('.ultimate-card-cost');
+      if (costEl) {
+        if (isOnCooldown) {
+          costEl.textContent = `⏳ 冷却中 ${Math.ceil((ult.cooldown - elapsed) / 1000)}s`;
+          card.classList.add('ultimate-card-on-cd');
+          card.style.cursor = 'not-allowed';
+        } else {
+          const hasRage = this._rageValue >= ult.rageCost;
+          costEl.textContent = `⚡ ${ult.rageCost} 怒气`;
+          card.classList.remove('ultimate-card-on-cd');
+          card.style.cursor = '';
+          if (hasRage) {
+            card.classList.remove('ultimate-card-no-rage');
+          } else {
+            card.classList.add('ultimate-card-no-rage');
+          }
+        }
+      }
+    }
+  }
+
+  /** 大招释放反馈 */
+  _onUltimateUsed(data) {
+    // 创建全屏文字特效
+    const textEl = document.createElement('div');
+    textEl.className = 'ultimate-text-effect';
+    textEl.textContent = `${data.icon} ${data.name}`;
+    document.body.appendChild(textEl);
+
+    void textEl.offsetWidth;
+    textEl.classList.add('show');
+
+    setTimeout(() => {
+      textEl.classList.remove('show');
+      textEl.classList.add('hide');
+      setTimeout(() => {
+        if (textEl.parentNode) textEl.parentNode.removeChild(textEl);
+      }, 600);
+    }, 1500);
+  }
+
+  // ==================== 诅咒系统 UI ====================
+
+  /**
+   * 诅咒升级时触发暗红色闪烁和通知
+   * @param {Array} upgraded - 升级了的诅咒列表 [{ curseId, stage, desc }]
+   */
+  _onCurseUpgraded(upgraded) {
+    if (!upgraded || upgraded.length === 0) return;
+
+    // 屏幕边缘暗红色闪烁
+    this._showCurseUpgradeFlash();
+
+    // 逐个显示诅咒升级通知
+    for (const item of upgraded) {
+      window.eventBus.emit('notification', {
+        message: `⚠ 诅咒升级！${item.desc}`,
+        type: 'warning',
+      });
+    }
+  }
+
+  /** 诅咒升级暗红色闪烁特效 */
+  _showCurseUpgradeFlash() {
+    const flash = document.createElement('div');
+    flash.className = 'curse-upgrade-flash';
+    document.body.appendChild(flash);
+
+    void flash.offsetWidth;
+    flash.classList.add('show');
+
+    setTimeout(() => {
+      flash.classList.remove('show');
+      setTimeout(() => {
+        if (flash.parentNode) flash.parentNode.removeChild(flash);
+      }, 300);
+    }, 800);
+  }
+
+  // ==================== Boss 战视觉特效 ====================
+
+  /** Boss 出现：创建 Boss HUD */
+  _onBossInit(data) {
+    // 移除旧 Boss HUD
+    const oldHud = document.getElementById('boss-hud');
+    if (oldHud && oldHud.parentNode) oldHud.parentNode.removeChild(oldHud);
+
+    const hud = document.createElement('div');
+    hud.id = 'boss-hud';
+    hud.className = 'boss-hud';
+
+    hud.innerHTML = `
+      <div class="boss-hud-icon">${data.icon}</div>
+      <div class="boss-hud-name">${data.name}</div>
+      <div class="boss-hud-desc">${data.description}</div>
+    `;
+
+    document.body.appendChild(hud);
+
+    // 入场动画
+    void hud.offsetWidth;
+    hud.classList.add('boss-hud-enter');
+  }
+
+  /** 熔岩巨像：灼烧格子 */
+  _onBossScorchCell(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (!cellEl) return;
+
+    cellEl.classList.add('cell-scorched');
+    // data.duration ms 后自动移除
+    setTimeout(() => {
+      cellEl.classList.remove('cell-scorched');
+    }, data.duration);
+  }
+
+  /** 熔岩巨像：灭火 */
+  _onBossExtinguishCell(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (!cellEl) return;
+
+    cellEl.classList.remove('cell-scorched');
+    // 灭火粒子效果
+    this._spawnParticles(data.row, data.col, '#ff6600', 8);
+  }
+
+  /** 熔岩巨像：愤怒激活 */
+  _onBossRageActivated() {
+    const hud = document.getElementById('boss-hud');
+    if (hud) {
+      hud.classList.add('boss-hud-rage');
+    }
+    // 屏幕边缘红色脉冲
+    const pulse = document.createElement('div');
+    pulse.className = 'boss-rage-pulse';
+    document.body.appendChild(pulse);
+    void pulse.offsetWidth;
+    pulse.classList.add('show');
+    setTimeout(() => {
+      pulse.classList.remove('show');
+      setTimeout(() => { if (pulse.parentNode) pulse.parentNode.removeChild(pulse); }, 500);
+    }, 1500);
+  }
+
+  /** 熔岩巨像：愤怒解除 */
+  _onBossRageDeactivated() {
+    const hud = document.getElementById('boss-hud');
+    if (hud) {
+      hud.classList.remove('boss-hud-rage');
+    }
+  }
+
+  /** 冰霜女巫：冻结行 */
+  _onBossFreezeRow(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    for (let c = 0; c < 10; c++) {
+      const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${c}"]`);
+      if (cellEl) {
+        cellEl.classList.add('cell-frozen');
+      }
+    }
+  }
+
+  /** 冰霜女巫：解冻行 */
+  _onBossThawRow(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    for (let c = 0; c < 10; c++) {
+      const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${c}"]`);
+      if (cellEl) {
+        cellEl.classList.remove('cell-frozen');
+        // 解冻碎裂特效
+        this._spawnParticles(data.row, c, '#88ccff', 4);
+      }
+    }
+  }
+
+  /** 冰霜女巫：暴风雪开始 */
+  _onBossBlizzardStarted(data) {
+    const overlay = document.createElement('div');
+    overlay.className = 'blizzard-overlay';
+    overlay.id = 'blizzard-overlay';
+    document.body.appendChild(overlay);
+
+    void overlay.offsetWidth;
+    overlay.classList.add('show');
+
+    // data.duration ms 后自动移除
+    setTimeout(() => {
+      overlay.classList.remove('show');
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 600);
+    }, data.duration || 8000);
+  }
+
+  /** 冰霜女巫：暴风雪结束 */
+  _onBossBlizzardEnded() {
+    const overlay = document.getElementById('blizzard-overlay');
+    if (overlay) {
+      overlay.classList.remove('show');
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 300);
+    }
+  }
+
+  /** 混沌之核：混沌波动 */
+  _onBossChaosWave() {
+    // 屏幕紫色闪烁
+    const flash = document.createElement('div');
+    flash.className = 'chaos-wave-flash';
+    document.body.appendChild(flash);
+    void flash.offsetWidth;
+    flash.classList.add('show');
+    setTimeout(() => {
+      flash.classList.remove('show');
+      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 400);
+    }, 1000);
+  }
+
+  /** 混沌之核：混沌元素生成 */
+  _onBossChaosSpawn(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (!cellEl) return;
+
+    cellEl.classList.add('cell-chaos');
+    // 闪烁动画
+    setTimeout(() => {
+      cellEl.classList.remove('cell-chaos');
+    }, 2000);
+  }
+
+  /** 时间吞噬者：吞噬倒计时更新 */
+  _onBossDevourTimer(data) {
+    let timerEl = document.getElementById('devour-timer');
+    if (!timerEl) {
+      timerEl = document.createElement('div');
+      timerEl.id = 'devour-timer';
+      timerEl.className = 'devour-timer';
+      document.body.appendChild(timerEl);
+    }
+
+    const remainingSec = Math.ceil(data.remaining / 1000);
+    timerEl.textContent = `⏳ ${remainingSec}s`;
+
+    // 低于30秒变红闪烁
+    if (remainingSec <= 15) {
+      timerEl.classList.add('devour-timer-critical');
+    } else if (remainingSec <= 30) {
+      timerEl.classList.add('devour-timer-warning');
+      timerEl.classList.remove('devour-timer-critical');
+    } else {
+      timerEl.classList.remove('devour-timer-warning', 'devour-timer-critical');
+    }
+  }
+
+  /** 时间吞噬者：吞噬列 */
+  _onBossDevourColumn(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    for (let r = 0; r < 10; r++) {
+      const cellEl = boardEl.querySelector(`[data-row="${r}"][data-col="${data.col}"]`);
+      if (cellEl) {
+        cellEl.classList.add('cell-devoured');
+        setTimeout(() => {
+          cellEl.classList.remove('cell-devoured');
+        }, 1500);
+      }
+    }
+  }
+
+  /** 时间吞噬者：延缓吞噬 */
+  _onBossDevourDelayed(data) {
+    const timerEl = document.getElementById('devour-timer');
+    if (!timerEl) return;
+
+    timerEl.classList.add('devour-delayed');
+    setTimeout(() => {
+      timerEl.classList.remove('devour-delayed');
+    }, 1000);
+  }
+
+  /** 创世之灵：镜像召唤 */
+  _onBossMirrorSummoned(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (!cellEl) return;
+
+    cellEl.classList.add('cell-mirror');
+    setTimeout(() => {
+      cellEl.classList.remove('cell-mirror');
+    }, 2500);
+  }
+
+  /** 创世之灵：祝福解封 */
+  _onBossBoonUnsealed() {
+    const flash = document.createElement('div');
+    flash.className = 'boon-unseal-flash';
+    document.body.appendChild(flash);
+    void flash.offsetWidth;
+    flash.classList.add('show');
+    setTimeout(() => {
+      flash.classList.remove('show');
+      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 500);
+    }, 1200);
+  }
+
+  /** Boss 胜利 */
+  _onBossVictory(data) {
+    // 移除 Boss HUD
+    const hud = document.getElementById('boss-hud');
+    if (hud) {
+      hud.classList.add('boss-hud-victory');
+      setTimeout(() => {
+        if (hud.parentNode) hud.parentNode.removeChild(hud);
+      }, 2000);
+    }
+
+    // 移除倒计时
+    const timer = document.getElementById('devour-timer');
+    if (timer && timer.parentNode) timer.parentNode.removeChild(timer);
+
+    // 全屏金光绽放
+    const victoryEffect = document.createElement('div');
+    victoryEffect.className = 'boss-victory-effect';
+    document.body.appendChild(victoryEffect);
+    void victoryEffect.offsetWidth;
+    victoryEffect.classList.add('show');
+    setTimeout(() => {
+      victoryEffect.classList.remove('show');
+      setTimeout(() => {
+        if (victoryEffect.parentNode) victoryEffect.parentNode.removeChild(victoryEffect);
+      }, 1200);
+    }, 2500);
+  }
+
+  /** Boss 失败 */
+  _onBossDefeated(data) {
+    const flash = document.createElement('div');
+    flash.className = 'boss-defeated-flash';
+    document.body.appendChild(flash);
+    void flash.offsetWidth;
+    flash.classList.add('show');
+    setTimeout(() => {
+      flash.classList.remove('show');
+      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 500);
+    }, 1500);
+  }
+
+  /** 生成粒子特效（通用辅助） */
+  _spawnParticles(row, col, color, count) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    if (!cellEl) return;
+
+    const rect = cellEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    for (let i = 0; i < (count || 6); i++) {
+      const particle = document.createElement('div');
+      particle.className = 'boss-particle';
+      particle.style.cssText = `
+        left: ${cx}px;
+        top: ${cy}px;
+        background: ${color || '#ffffff'};
+        --dx: ${(Math.random() - 0.5) * 80}px;
+        --dy: ${(Math.random() - 0.5) * 80}px;
+        --dr: ${Math.random() * 360}deg;
+      `;
+      document.body.appendChild(particle);
+      void particle.offsetWidth;
+      particle.classList.add('show');
+      setTimeout(() => {
+        if (particle.parentNode) particle.parentNode.removeChild(particle);
+      }, 700);
     }
   }
 }
