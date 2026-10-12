@@ -44,7 +44,11 @@
     rogueSystem.init(boonSystem, eventSystem, metaProgress);
     rogueUIManager.init(rogueSystem, boonSystem, eventSystem, gameEngine);
 
-    // 设置按钮事件
+    // 暴露全局引用供调试工具使用
+    window.__gameEngine = gameEngine;
+    window.__boonSystem = boonSystem;
+
+  // 设置按钮事件
     setupButtons();
 
     // 注册肉鸽事件

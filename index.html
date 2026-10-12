@@ -38,6 +38,7 @@
         <div class="rogue-level-top">
           <span class="rogue-floor-badge" id="rogue-floor-btn" style="cursor:pointer;" title="点击查看历史路线图">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
           <span class="rogue-gold-display">🪙 <span id="rogue-gold">0</span></span>
+          <button id="debug-btn" class="debug-btn-side" title="调试工具（开发用）">🔧</button>
         </div>
         <button id="rogue-map-btn-side" class="tool-btn rogue-map-btn" title="查看当前层路线图">🗺 查看路线图</button>
       </section>
@@ -143,6 +144,7 @@
 
   <!-- ====== 第6层：工具与入口（依赖全部上层） ====== -->
   <script src="js/utils/StorageManager.js"></script>
+  <script src="js/utils/DebugTool.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
