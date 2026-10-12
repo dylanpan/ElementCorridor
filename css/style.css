@@ -271,12 +271,16 @@ body {
 .emitter-icon {
   font-size: 1.5rem;
   line-height: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .emitter-name {
   font-size: 0.88rem;
   font-weight: 500;
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .cooldown-bar {
@@ -1309,38 +1313,7 @@ body {
   100% { filter: brightness(1); }
 }
 
-/* 冷却环指示器 */
-.cooldown-ring-container {
-  position: absolute;
-  inset: 2px;
-  pointer-events: none;
-}
 
-.cooldown-ring-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.cooldown-ring-bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.06);
-  stroke-width: 2;
-}
-
-.cooldown-ring-fill {
-  fill: none;
-  stroke: url(#cooldownGradient);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.15s linear;
-}
-
-/* 冷却中半透明 */
-.emitter-btn.on-cooldown {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
 
 /* 就绪呼吸动画 */
 .emitter-btn-ready {
@@ -1475,4 +1448,920 @@ body {
   87% { opacity: 0; }
   93% { opacity: 0.15; }
   97% { opacity: 0; }
+}
+
+/* ==================== 波次系统样式 ==================== */
+
+/* 波次横幅容器 */
+.wave-banner-container {
+  position: fixed;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 995;
+  transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.wave-banner-container.show {
+  top: 80px;
+}
+
+.wave-banner-container.hide {
+  top: -140px;
+  transition: top 0.4s ease-in;
+}
+
+/* 波次横幅本体 */
+.wave-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 36px;
+  border-radius: 14px;
+  min-width: 280px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+.wave-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.15;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.3), transparent 70%);
+  pointer-events: none;
+}
+
+/* 不同层级的波次颜色 */
+.wave-banner-early {
+  background: linear-gradient(135deg, #1a237e, #283593);
+  border: 2px solid #5c6bc0;
+}
+
+.wave-banner-mid {
+  background: linear-gradient(135deg, #e65100, #bf360c);
+  border: 2px solid #ff7043;
+}
+
+.wave-banner-late {
+  background: linear-gradient(135deg, #4a148c, #6a1b9a);
+  border: 2px solid #ce93d8;
+}
+
+/* 波次标题行 */
+.wave-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wave-banner-icon {
+  font-size: 1.6rem;
+  animation: waveIconPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes waveIconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+
+.wave-banner-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255,255,255,0.3);
+}
+
+.wave-banner-label {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.9);
+  font-weight: 600;
+}
+
+.wave-banner-target {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.7);
+}
+
+.wave-banner-reward {
+  margin-top: 4px;
+  padding: 4px 18px;
+  background: rgba(255, 215, 0, 0.22);
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffd700;
+  animation: rewardGlow 1s ease-in-out infinite alternate;
+}
+
+@keyframes rewardGlow {
+  0% { box-shadow: 0 0 4px rgba(255, 215, 0, 0.2); }
+  100% { box-shadow: 0 0 16px rgba(255, 215, 0, 0.5); }
+}
+
+/* ==================== 波次进度条 ==================== */
+.wave-progress-container {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.wave-progress-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.wave-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.wave-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #42a5f5, #7e57c2, #ff7043);
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.wave-progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  border-radius: 4px;
+  animation: progressShimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* ==================== 紧急事件横幅样式 ==================== */
+
+.event-banner-container {
+  position: fixed;
+  bottom: -160px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 994;
+  transition: bottom 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: none;
+}
+
+.event-banner-container.show {
+  bottom: 120px;
+}
+
+.event-banner-container.hide {
+  bottom: -180px;
+  transition: bottom 0.4s ease-in;
+}
+
+/* 紧急事件横幅本体 */
+.event-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 28px;
+  border-radius: 12px;
+  min-width: 240px;
+  max-width: 320px;
+  box-shadow: 0 6px 28px rgba(244, 67, 54, 0.38);
+  position: relative;
+  overflow: hidden;
+}
+
+.event-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 8px,
+    rgba(255,255,255,0.06) 8px,
+    rgba(255,255,255,0.06) 16px
+  );
+  pointer-events: none;
+}
+
+/* 各事件类型颜色 */
+.event-banner-double_points {
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  border: 2px solid #66bb6a;
+}
+.event-banner-speed_up {
+  background: linear-gradient(135deg, #0d47a1, #1565c0);
+  border: 2px solid #42a5f5;
+}
+.event-banner-combo_fever {
+  background: linear-gradient(135deg, #e65100, #ef6c00);
+  border: 2px solid #ff9800;
+}
+.event-banner-order_rush {
+  background: linear-gradient(135deg, #880e4f, #ad1457);
+  border: 2px solid #ec407a;
+}
+.event-banner-freeze {
+  background: linear-gradient(135deg, #01579b, #0277bd);
+  border: 2px solid #29b6f6;
+}
+.event-banner-element_flood {
+  background: linear-gradient(135deg, #004d40, #00695c);
+  border: 2px solid #26a69a;
+}
+.event-banner-mystery_box {
+  background: linear-gradient(135deg, #311b92, #4527a0);
+  border: 2px solid #b39ddb;
+}
+
+.event-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-banner-icon {
+  font-size: 1.4rem;
+  animation: eventIconShake 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes eventIconShake {
+  0% { transform: rotate(-5deg) scale(1); }
+  100% { transform: rotate(5deg) scale(1.1); }
+}
+
+.event-banner-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.event-banner-desc {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.3;
+}
+
+/* 倒计时区域 */
+.event-banner-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.event-timer-icon {
+  font-size: 1rem;
+}
+
+.event-countdown-text {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 倒计时闪烁 */
+.countdown-flash {
+  animation: countdownPulse 1s ease-in-out infinite;
+}
+
+@keyframes countdownPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* 最后3秒紧急闪烁 */
+.countdown-urgent {
+  color: #ff1744 !important;
+  animation: urgentFlash 0.4s ease-in-out infinite !important;
+}
+
+@keyframes urgentFlash {
+  0%, 49% { opacity: 1; transform: scale(1); }
+  50%, 99% { opacity: 0.2; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ==================== 评级结算面板样式 ==================== */
+
+.rating-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 0;
+}
+
+/* 综合评级区域 */
+.rating-overall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 36px;
+  border-radius: 16px;
+  border: 2px solid #ffd700;
+  background: radial-gradient(ellipse at center, rgba(255,215,0,0.07), transparent 60%);
+  position: relative;
+  overflow: hidden;
+  min-width: 220px;
+}
+
+/* 金色粒子背景 */
+.rating-overall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(255,215,0,0.3), transparent),
+    radial-gradient(2px 2px at 48% 72%, rgba(255,215,0,0.25), transparent),
+    radial-gradient(3px 3px at 76% 44%, rgba(255,215,0,0.27), transparent),
+    radial-gradient(2px 2px at 88% 88%, rgba(255,215,0,0.21), transparent),
+    radial-gradient(2px 2px at 33% 64%, rgba(255,215,0,0.19), transparent),
+    radial-gradient(3px 3px at 62% 13%, rgba(255,215,0,0.26), transparent),
+    radial-gradient(2px 2px at 11% 90%, rgba(200,160,0,0.17), transparent),
+    radial-gradient(2px 2px at 90% 52%, rgba(230,190,0,0.22), transparent),
+    radial-gradient(3px 3px at 43% 43%, rgba(210,180,0,0.31), transparent),
+    radial-gradient(2px 2px at 68% 83%, rgba(250,220,0,0.18), transparent);
+  animation: goldParticlesFloat 3s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes goldParticlesFloat {
+  0% { opacity: 0.5; transform: translateY(0); }
+  100% { opacity: 1; transform: translateY(-6px); }
+}
+
+.rating-overall-grade {
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 30px currentColor, 0 0 60px currentColor;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+  animation: gradeReveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes gradeReveal {
+  0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.15) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.rating-overall-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rating-overall-score {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.rating-stardust-multiplier {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* 四维度卡片区域 */
+.rating-dimensions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.rating-dim-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.2s ease;
+}
+
+.rating-dim-card:hover {
+  transform: translateY(-2px);
+}
+
+.rating-dim-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rating-dim-icon {
+  font-size: 1rem;
+}
+
+.rating-dim-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rating-dim-desc {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.rating-dim-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.rating-dim-grade {
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.rating-dim-subtitle {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.rating-dim-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rating-dim-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 统计数据 */
+.rating-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+  padding: 10px 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rating-stats span {
+  font-size: 0.77rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ==================== 紧急事件预警闪烁箭头 ==================== */
+
+.event-warning-arrow {
+  position: fixed;
+  top: 66px;
+  right: 260px;
+  z-index: 993;
+  font-size: 1.8rem;
+  color: #f44336;
+  animation: warningArrowBounce 0.5s ease-in-out infinite alternate;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.event-warning-arrow.show {
+  opacity: 1;
+}
+
+@keyframes warningArrowBounce {
+  0% { transform: translateY(0) scale(1); opacity: 0.7; }
+  100% { transform: translateY(8px) scale(1.15); opacity: 1; }
+}
+
+/* 预警箭头脉冲光环 */
+.event-warning-arrow::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244,67,54,0.2), transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: arrowPulseRing 1s ease-out infinite;
+}
+
+@keyframes arrowPulseRing {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+}
+/* ==================== 加急订单进度条 ==================== */
+
+.order-card-rush {
+  border: 2px solid #ec407a !important;
+  box-shadow: 0 0 12px rgba(236, 64, 122, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.order-card-rush::before {
+  content: '⏱';
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.rush-order-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 6px;
+  margin-top: 4px;
+}
+
+.rush-order-bar {
+  flex: 1;
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  border-radius: 3px;
+  transition: width 0.15s linear;
+}
+
+.rush-order-bar-urgent {
+  background: linear-gradient(90deg, #f44336, #ff9800) !important;
+  animation: rushBarPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes rushBarPulse {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.rush-order-timer {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ec407a;
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 加急订单消失动画 */
+.order-card-disappear {
+  animation: orderCardDisappear 0.35s ease-in forwards;
+}
+
+@keyframes orderCardDisappear {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.6); opacity: 0; }
+}
+
+/* ==================== 发射器冻结特效 ==================== */
+
+.emitter-frozen {
+  position: relative;
+  background: linear-gradient(135deg, rgba(1, 87, 155, 0.25), rgba(2, 119, 189, 0.18)) !important;
+  border-color: #29b6f6 !important;
+  box-shadow: 0 0 16px rgba(41, 182, 246, 0.35), inset 0 0 20px rgba(41, 182, 246, 0.08);
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.emitter-frozen::after {
+  content: '❄';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 1rem;
+  animation: frozenIconSpin 2s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(41, 182, 246, 0.6));
+}
+
+.emitter-frozen .emitter-icon {
+  animation: frozenShiver 0.15s ease-in-out infinite alternate;
+}
+
+.emitter-frozen .emitter-name {
+  color: #81d4fa;
+}
+
+@keyframes frozenIconSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(10deg) scale(1.15); }
+  50% { transform: rotate(0deg) scale(1); }
+  75% { transform: rotate(-10deg) scale(1.15); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes frozenShiver {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-1px, 0.5px); }
+  66% { transform: translate(1px, -0.5px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* 冰晶装饰粒子（通过伪元素实现） */
+.emitter-frozen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 30% 30%, rgba(179, 229, 252, 0.6), transparent),
+    radial-gradient(1px 1px at 60% 70%, rgba(129, 212, 250, 0.5), transparent),
+    radial-gradient(2px 2px at 80% 40%, rgba(79, 195, 247, 0.45), transparent),
+    radial-gradient(1px 1px at 42% 85%, rgba(144, 202, 249, 0.55), transparent);
+  animation: iceCrystalsFloat 2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes iceCrystalsFloat {
+  0% { opacity: 0.4; }
+  100% { opacity: 0.9; }
+}
+
+/* ==================== 元素洪流特效 ==================== */
+
+/* 水波纹扩散 */
+.board-cell.flood-ripple .element-icon {
+  animation: floodRipple 0.6s ease-out;
+}
+
+@keyframes floodRipple {
+  0% { transform: scale(0.3); opacity: 0; filter: hue-rotate(0deg); }
+  40% { transform: scale(1.25); opacity: 1; filter: hue-rotate(30deg) brightness(1.3); }
+  100% { transform: scale(1); opacity: 1; filter: hue-rotate(0deg) brightness(1); }
+}
+
+.board-cell.flood-ripple {
+  animation: floodCellPulse 0.5s ease-out;
+}
+
+@keyframes floodCellPulse {
+  0% { box-shadow: inset 0 0 0 rgba(41, 182, 246, 0); }
+  50% { box-shadow: inset 0 0 20px rgba(41, 182, 246, 0.35), 0 0 12px rgba(41, 182, 246, 0.2); }
+  100% { box-shadow: inset 0 0 0 rgba(41, 182, 246, 0); }
+}
+
+/* 水花粒子 */
+.flood-drop {
+  position: fixed;
+  pointer-events: none;
+  z-index: 998;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #81d4fa, #29b6f6);
+  box-shadow: 0 0 4px rgba(41, 182, 246, 0.6);
+  animation: floodDropFly 0.55s ease-out forwards;
+}
+
+@keyframes floodDropFly {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  60% { transform: translate(var(--fx), var(--fy)) scale(0.6); opacity: 0.7; }
+  100% { transform: translate(calc(var(--fx) * 1.5), calc(var(--fy) * 1.5)) scale(0); opacity: 0; }
+}
+
+/* ==================== 连击狂热积分增长特效 ==================== */
+
+.combo-fever-label {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #ff4500;
+  text-shadow:
+    0 0 10px rgba(255, 69, 0, 0.6),
+    0 0 24px rgba(255, 140, 0, 0.3);
+  transform: translate(-50%, -50%);
+  animation: feverLabelPop 0.8s ease-out forwards;
+}
+
+@keyframes feverLabelPop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  30% { transform: translate(-50%, -50%) scale(1.4); opacity: 1; }
+  70% { transform: translate(-50%, -60%) scale(1.1); opacity: 0.9; }
+  100% { transform: translate(-50%, -80%) scale(0.8); opacity: 0; }
+}
+
+.combo-fever-bonus {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ff8c00;
+  text-shadow: 0 0 8px rgba(255, 140, 0, 0.4);
+  transform: translate(-50%, -50%);
+  animation: feverBonusFloat 0.9s ease-out forwards;
+}
+
+@keyframes feverBonusFloat {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  80% { transform: translate(-50%, -90%) scale(1); opacity: 0.7; }
+  100% { transform: translate(-50%, -120%) scale(0.7); opacity: 0; }
+}
+
+.combo-fever-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 997;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: feverParticleBurst 0.65s ease-out forwards;
+}
+
+@keyframes feverParticleBurst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--fx), var(--fy)) scale(0); opacity: 0; }
+}
+
+/* ==================== 发射器加速生产特效 ==================== */
+
+.emitter-speed-up {
+  position: relative;
+  background: linear-gradient(135deg, rgba(21, 101, 192, 0.22), rgba(33, 150, 243, 0.16)) !important;
+  border-color: #42a5f5 !important;
+  box-shadow: 0 0 14px rgba(66, 165, 245, 0.28), inset 0 0 18px rgba(66, 165, 245, 0.06);
+}
+
+.emitter-speed-up::after {
+  content: '⚡';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  font-size: 0.95rem;
+  animation: speedUpIconFlash 0.8s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(66, 165, 245, 0.7));
+}
+
+.emitter-speed-up .emitter-icon {
+  animation: speedUpIconBounce 0.45s ease-in-out infinite alternate;
+}
+
+.emitter-speed-up .emitter-name {
+  color: #64b5f6;
+}
+
+.emitter-speed-up .emitter-cooldown-bar {
+  background: linear-gradient(90deg, #42a5f5, #2196f3) !important;
+  opacity: 0.45 !important;
+}
+
+@keyframes speedUpIconFlash {
+  0% { transform: rotate(-8deg) scale(1); opacity: 0.7; }
+  50% { transform: rotate(8deg) scale(1.2); opacity: 1; }
+  100% { transform: rotate(-8deg) scale(1); opacity: 0.7; }
+}
+
+@keyframes speedUpIconBounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-2px); }
+}
+
+/* ==================== 发射器冷却进度条（整个按钮背景） ==================== */
+.emitter-cooldown-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ef5350, #ff7043);
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 0;
+  transition: width 0.12s linear, background 0.25s ease;
+  opacity: 0.35;
+}
+
+/* 倒计时数字（位于进度条上方） */
+.cooldown-timer-text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #90caf9;
+  text-shadow: 0 0 6px rgba(144, 202, 249, 0.4);
+  pointer-events: none;
+  z-index: 2;
+  display: none;
+  line-height: 1;
+}
+
+.emitter-btn.on-cooldown .cooldown-timer-text {
+  display: block;
+  animation: timerPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes timerPulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* ==================== 三合一候选高亮 ==================== */
+.triple-candidate {
+  outline: 3px solid #ffd54f;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 12px rgba(255, 213, 79, 0.5), 0 0 8px rgba(255, 213, 79, 0.4);
+  animation: tripleCandidatePulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes tripleCandidatePulse {
+  0% { outline-color: #ffd54f; box-shadow: inset 0 0 12px rgba(255, 213, 79, 0.5), 0 0 8px rgba(255, 213, 79, 0.4); }
+  100% { outline-color: #ffb300; box-shadow: inset 0 0 18px rgba(255, 179, 0, 0.7), 0 0 14px rgba(255, 179, 0, 0.6); }
+}
+
+/* ==================== 通用横幅系统 ==================== */
+.game-banner-container {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-120px);
+  z-index: 998;
+  pointer-events: none;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.game-banner-container.show {
+  transform: translateX(-50%) translateY(0);
+}
+
+.game-banner-container.hide {
+  transform: translateX(-50%) translateY(-140px);
+}
+
+.game-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 193, 7, 0.08));
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  color: #ffd700;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.game-banner-icon {
+  font-size: 1.3rem;
+}
+
+.game-banner-text {
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* 连击横幅 */
+.game-banner.combo-banner {
+  background: linear-gradient(135deg, rgba(255, 69, 0, 0.2), rgba(255, 152, 0, 0.1));
+  border-color: rgba(255, 87, 34, 0.4);
+  color: #ff7043;
+  box-shadow: 0 8px 32px rgba(255, 69, 0, 0.2);
+}
+
+/* Combo Break 横幅 */
+.game-banner.combo-break-banner {
+  background: linear-gradient(135deg, rgba(244, 67, 54, 0.25), rgba(244, 67, 54, 0.12));
+  border-color: rgba(244, 67, 54, 0.55);
+  color: #ef5350;
+  box-shadow: 0 8px 32px rgba(244, 67, 54, 0.2);
+  animation: breakBannerShake 0.4s ease-in-out;
+}
+
+@keyframes breakBannerShake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-8px) rotate(-1deg); }
+  40% { transform: translateX(8px) rotate(1deg); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
 }

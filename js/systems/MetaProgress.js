@@ -52,6 +52,8 @@ class MetaProgress {
         bestFloor: 0,
         highestScore: 0,
         totalStardustEarned: 0,
+        // 最佳评级记录（按关卡编号索引）
+        bestRatings: {},
       },
       
       // 每日挑战记录
@@ -353,6 +355,36 @@ class MetaProgress {
     if (floorReached > this.data.stats.bestFloor) this.data.stats.bestFloor = floorReached;
     if (score > this.data.stats.highestScore) this.data.stats.highestScore = score;
     this.save();
+  }
+
+  /**
+   * 记录最佳评级
+   * @param {number} level - 关卡编号
+   * @param {object} rating - 评级数据（含 overall.grade 等）
+   */
+  recordBestRating(level, rating) {
+    const key = `level_${level}`;
+    const existing = this.data.stats.bestRatings[key];
+    // 等级分数映射：S=5, A=4, B=3, C=2, D=1
+    const gradeScore = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+    const newScore = gradeScore[rating.overall.grade] || 0;
+    const oldScore = existing ? (gradeScore[existing.overallGrade] || 0) : 0;
+
+    if (!existing || newScore > oldScore) {
+      this.data.stats.bestRatings[key] = {
+        overallGrade: rating.overall.grade,
+        overallTitle: rating.overall.title,
+        dimensions: {
+          speed: rating.dimensions.speed.grade,
+          combo: rating.dimensions.combo.grade,
+          efficiency: rating.dimensions.efficiency.grade,
+          merge: rating.dimensions.merge.grade,
+        },
+        stats: { ...rating.stats },
+        achievedAt: Date.now(),
+      };
+      this.save();
+    }
   }
 
   /** 获取统计数据 */

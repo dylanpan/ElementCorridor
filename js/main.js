@@ -55,6 +55,11 @@
       updateBoardScoreDisplay(data.score, data.targetScore);
     });
 
+    // 监听评级面板的下一关按钮
+    window.eventBus.on('ui:start-level', (level) => {
+      gameEngine.startLevel(level);
+    });
+
     // 显示主菜单
     showMainMenu();
   }

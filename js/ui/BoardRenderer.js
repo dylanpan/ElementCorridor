@@ -491,6 +491,40 @@ class BoardRenderer {
   }
 
   /**
+   * 播放元素洪流专属特效（水波纹扩散 + 水花粒子）
+   */
+  playFloodEffect(row, col) {
+    const cell = this.cells[row]?.[col];
+    if (!cell) return;
+
+    // 添加洪流水波纹动画
+    cell.classList.remove('flood-ripple');
+    void cell.offsetWidth;
+    cell.classList.add('flood-ripple');
+
+    // 在 cell 位置创建水花粒子效果
+    const rect = cell.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    for (let i = 0; i < 5; i++) {
+      const drop = document.createElement('div');
+      drop.className = 'flood-drop';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 20 + Math.random() * 30;
+      drop.style.left = `${cx}px`;
+      drop.style.top = `${cy}px`;
+      drop.style.setProperty('--fx', `${Math.cos(angle) * dist}px`);
+      drop.style.setProperty('--fy', `${Math.sin(angle) * dist}px`);
+      drop.style.animationDelay = `${i * 0.06}s`;
+      document.body.appendChild(drop);
+      setTimeout(() => {
+        if (drop.parentNode) drop.parentNode.removeChild(drop);
+      }, 700);
+    }
+  }
+
+  /**
    * 播放提交动画（元素飞向订单面板）
    */
   playSubmitAnimation(row, col, callback) {

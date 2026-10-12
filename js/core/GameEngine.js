@@ -47,6 +47,56 @@ class GameEngine {
     // 已触发的连击里程碑（用于首次完整效果）
     this._triggeredMilestones = new Set();
 
+    // ==================== 波次系统状态 ====================
+    /** @type {Array<{type:string,target:number,label:string,reward:number}>} */
+    this._waves = [];
+    /** @type {number} 当前波次索引（0起始） */
+    this._currentWaveIndex = 0;
+    /** @type {number} 本关累计完成订单数 */
+    this._totalOrdersCompleted = 0;
+    /** @type {number} 本关累计合成次数 */
+    this._totalMergesCount = 0;
+
+    // ==================== 紧急事件系统状态 ====================
+    /** @type {object|null} 当前活跃的紧急事件 */
+    this._activeEvent = null;
+    /** @type {number|null} 当前事件结束定时器ID */
+    this._eventTimerId = null;
+    /** @type {Object<string, number>} 各事件ID → 下次可触发时间戳 */
+    this._eventCooldowns = {};
+    /** @type {object} 事件运行时上下文（供 apply/cleanup 读写） */
+    this._eventCtx = {
+      scoreMultiplier: 1,
+      emitterSpeedMultiplier: 1,
+      freezeEmitters: false,
+      comboMultiplier: 1,
+      floodActive: false,
+      floodInterval: 0,
+      spawnRushOrder: false,
+      removeRushOrder: null,
+      triggerMysteryReward: false,
+    };
+    /** @type {number|null} 元素洪流定时器ID */
+    this._floodTimerId = null;
+    /** @type {number} 上次检查事件的时间戳 */
+    this._lastEventCheckTime = 0;
+    /** @type {number} 上次发射事件tick的时间戳 */
+    this._lastTickTime = 0;
+
+    // ==================== 评分评级数据 ====================
+    /** @type {number} 关卡开始时间戳 */
+    this._levelStartTime = 0;
+    /** @type {number} 总操作次数（合成+移动+提交订单） */
+    this._operationCount = 0;
+    /** @type {number} 本关最高连击数 */
+    this._highestCombo = 0;
+    /** @type {number} 本关最高合成等级 */
+    this._maxMergeLevel = 0;
+    /** @type {number} 本关完成订单数 */
+    this._ratingOrdersCompleted = 0;
+    /** @type {number} 本关合成次数 */
+    this._ratingMergesCount = 0;
+
     // 绑定事件
     window.eventBus.on('ui:order-clicked', (orderId) => this._onOrderClicked(orderId));
   }
@@ -76,6 +126,12 @@ class GameEngine {
     this.state.isPlaying = true;
     this.state.isPaused = false;
     this.state.levelConfig = levelConfig;
+
+    // 重置紧急事件系统
+    this._resetEventSystem();
+
+    // 重置评分数据
+    this._resetRatingData();
 
     // 清除连击超时
     if (this._comboTimeoutId) {
@@ -167,11 +223,654 @@ class GameEngine {
     // 启动自动存档
     this._startAutoSave();
 
+    // 初始化波次系统
+    this._initWaves(level);
+
     // 隐藏弹窗
     this.uiManager.hideModal();
 
     // 启动自动整理（如果拥有自动整理祝福）
     this._startAutoSort();
+  }
+
+  // ==================== 波次系统 ====================
+
+  /**
+   * 根据关卡编号初始化波次列表
+   * @param {number} level - 关卡编号
+   */
+  _initWaves(level) {
+    // 确定难度层级：1→early, 2→mid, 3+→late
+    let tier = 'early';
+    if (level >= 3) {
+      tier = 'late';
+    } else if (level === 2) {
+      tier = 'mid';
+    }
+
+    const templates = WAVE_CONFIGS[tier];
+    if (!templates || templates.length === 0) {
+      this._waves = [];
+      this._currentWaveIndex = -1;
+      return;
+    }
+
+    // 深拷贝模板，每个波次独立
+    this._waves = templates.map(t => ({ ...t }));
+    this._currentWaveIndex = 0;
+    this._totalOrdersCompleted = 0;
+    this._totalMergesCount = 0;
+
+    // 发射第一波事件
+    window.eventBus.emit('wave:started', {
+      waveIndex: 0,
+      totalWaves: this._waves.length,
+      wave: this._waves[0],
+    });
+  }
+
+  /**
+   * 独立检查分数是否达标，达标则直接通关（不受波次进度限制）
+   */
+  _checkScoreComplete() {
+    if (!this.state.isPlaying) return;
+    if (this.state.score >= this.state.targetScore) {
+      this._onLevelComplete();
+    }
+  }
+
+  /**
+   * 检查当前波次目标是否达成，若达成则推进到下一波
+   */
+  _checkWaveProgress() {
+    if (!this.state.isPlaying) return;
+    if (this._currentWaveIndex < 0 || this._currentWaveIndex >= this._waves.length) return;
+
+    const currentWave = this._waves[this._currentWaveIndex];
+    let isMet = false;
+
+    switch (currentWave.type) {
+      case 'score':
+        isMet = this.state.score >= currentWave.target;
+        break;
+      case 'orders':
+        isMet = this._totalOrdersCompleted >= currentWave.target;
+        break;
+      case 'combo': {
+        const comboCount = this.systems.merge ? this.systems.merge.comboCount : 0;
+        isMet = comboCount >= currentWave.target;
+        break;
+      }
+      case 'merge':
+        isMet = this._totalMergesCount >= currentWave.target;
+        break;
+      default:
+        isMet = false;
+    }
+
+    if (isMet) {
+      this._advanceToNextWave();
+    }
+  }
+
+  /**
+   * 推进到下一波次
+   */
+  _advanceToNextWave() {
+    const completedWave = this._waves[this._currentWaveIndex];
+
+    // 应用波次奖励
+    const reward = completedWave.reward || 0;
+    if (reward > 0) {
+      this.state.score += reward;
+      window.eventBus.emit('score:updated', {
+        score: this.state.score,
+        targetScore: this.state.targetScore,
+      });
+    }
+
+    // 发射波次完成事件
+    window.eventBus.emit('wave:completed', {
+      waveIndex: this._currentWaveIndex,
+      totalWaves: this._waves.length,
+      wave: completedWave,
+      reward: reward,
+    });
+
+    // 推进到下一波
+    this._currentWaveIndex++;
+
+    // 检查是否所有波次已完成
+    if (this._currentWaveIndex >= this._waves.length) {
+      // 所有波次完成 → 检查是否达到通关分数
+      if (this.state.score >= this.state.targetScore) {
+        this._onLevelComplete();
+      }
+      return;
+    }
+
+    // 发射新一波事件
+    window.eventBus.emit('wave:started', {
+      waveIndex: this._currentWaveIndex,
+      totalWaves: this._waves.length,
+      wave: this._waves[this._currentWaveIndex],
+    });
+  }
+
+  /**
+   * 获取当前波次进度信息（供UI查询）
+   * @returns {{ currentWave: number, totalWaves: number, waveLabel: string, progressPercent: number, allDone: boolean }}
+   */
+  _getWaveProgress() {
+    if (!this._waves || this._waves.length === 0) {
+      return { currentWave: 0, totalWaves: 0, waveLabel: '', progressPercent: 100, allDone: true };
+    }
+
+    const total = this._waves.length;
+    const idx = Math.min(this._currentWaveIndex, total);
+    const allDone = idx >= total;
+
+    if (allDone) {
+      return { currentWave: total, totalWaves: total, waveLabel: '全部完成', progressPercent: 100, allDone: true };
+    }
+
+    const wave = this._waves[idx];
+    const progressPercent = Math.round((idx / total) * 100);
+
+    return {
+      currentWave: idx + 1,
+      totalWaves: total,
+      waveLabel: wave.label,
+      progressPercent,
+      allDone: false,
+    };
+  }
+
+  // ==================== 紧急事件系统 ====================
+
+  /**
+   * 重置事件系统状态（关卡开始时调用）
+   */
+  _resetEventSystem() {
+    if (this._eventTimerId) {
+      clearTimeout(this._eventTimerId);
+      this._eventTimerId = null;
+    }
+    if (this._floodTimerId) {
+      clearInterval(this._floodTimerId);
+      this._floodTimerId = null;
+    }
+    this._activeEvent = null;
+    this._eventCooldowns = {};
+    this._lastEventCheckTime = 0;
+    // 重置事件上下文到默认值
+    Object.assign(this._eventCtx, {
+      scoreMultiplier: 1,
+      emitterSpeedMultiplier: 1,
+      freezeEmitters: false,
+      comboMultiplier: 1,
+      floodActive: false,
+      floodInterval: 0,
+      spawnRushOrder: false,
+      removeRushOrder: null,
+      triggerMysteryReward: false,
+    });
+  }
+
+  /**
+   * 统一检查是否可触发紧急事件
+   * 在订单提交、连击中断等关键时机调用
+   */
+  _checkEmergencyEvents() {
+    // 已有活跃事件或未开始游戏则不触发
+    if (this._activeEvent || !this.state.isPlaying) return;
+
+    const now = Date.now();
+
+    // 防止过于频繁检查（至少间隔5秒）
+    if (now - this._lastEventCheckTime < 5000) return;
+    this._lastEventCheckTime = now;
+
+    // 收集所有不在冷却中的事件
+    const available = EMERGENCY_EVENTS.filter(e => {
+      const cooldownEnd = this._eventCooldowns[e.id] || 0;
+      return now >= cooldownEnd;
+    });
+
+    if (available.length === 0) return;
+
+    // 肉鸽模式：祝福/诅咒影响触发概率
+    let probabilityModifier = 1;
+    if (this.isRogueMode && this.boonSystem) {
+      // 诅咒「混乱元素」增加事件概率
+      if (this.boonSystem.hasCurse('curse_element_confusion')) {
+        probabilityModifier *= 1.4;
+      }
+      // 祝福「平静之心」降低负面事件概率
+      if (this.boonSystem.hasBoon('boon_calm_mind')) {
+        probabilityModifier *= 0.6;
+      }
+    }
+
+    // 按权重随机选取一个事件
+    const totalWeight = available.reduce((sum, e) => sum + e.weight, 0);
+    let roll = Math.random() * totalWeight * (1 / probabilityModifier);
+
+    // 如果概率修正后 roll 超出总权重，则不触发
+    if (roll > totalWeight) return;
+
+    let selected = null;
+    for (const e of available) {
+      roll -= e.weight;
+      if (roll <= 0) {
+        selected = e;
+        break;
+      }
+    }
+
+    if (!selected) return;
+
+    // 额外概率判定：基础触发率 35%，受修正影响
+    const baseChance = 0.35 * probabilityModifier;
+    if (Math.random() > baseChance) return;
+
+    this._startEvent(selected);
+  }
+
+  /**
+   * 启动一个紧急事件
+   * @param {object} event - EMERGENCY_EVENTS 中的事件定义
+   */
+  _startEvent(event) {
+    if (this._activeEvent) return;
+
+    this._activeEvent = event;
+
+    // 记录冷却时间
+    this._eventCooldowns[event.id] = Date.now() + event.cooldownMs;
+    this._eventStartTime = Date.now();
+
+    // 应用事件效果
+    event.apply(this._eventCtx);
+
+    // 特殊处理：冻结发射器
+    if (event.id === 'freeze') {
+      this._freezeEmitters();
+    }
+
+    // 特殊处理：加速生产 → 发射器视觉特效由 UIManager 通过 event:started 处理
+    // （无需额外逻辑）
+
+    // 特殊处理：元素洪流启动定时填充
+    if (event.id === 'element_flood' && this._eventCtx.floodActive) {
+      this._startFloodTimer();
+    }
+
+    // 特殊处理：加急订单
+    if (event.id === 'order_rush' && this._eventCtx.spawnRushOrder) {
+      this._spawnRushOrder();
+    }
+
+    // 特殊处理：神秘宝箱
+    if (event.id === 'mystery_box' && this._eventCtx.triggerMysteryReward) {
+      this._applyMysteryReward();
+    }
+
+    // 发射事件开始信号
+    window.eventBus.emit('event:started', {
+      id: event.id,
+      name: event.name,
+      icon: event.icon,
+      description: event.description,
+      durationMs: event.durationMs,
+      category: event.category,
+    });
+
+    // 设置事件结束定时器
+    this._eventTimerId = setTimeout(() => {
+      this._endActiveEvent();
+    }, event.durationMs);
+  }
+
+  /**
+   * 结束当前活跃事件
+   */
+  _endActiveEvent() {
+    if (!this._activeEvent) return;
+
+    const event = this._activeEvent;
+
+    // 清理事件效果
+    event.cleanup(this._eventCtx);
+
+    // 移除加急订单（如果有）
+    if (this._eventCtx.removeRushOrder) {
+      this._eventCtx.removeRushOrder();
+      this._eventCtx.removeRushOrder = null;
+    }
+
+    // 解冻发射器（如果是冻结事件）
+    if (event.id === 'freeze') {
+      this._unfreezeEmitters();
+    }
+
+    // 停止洪流定时器
+    if (this._floodTimerId) {
+      clearInterval(this._floodTimerId);
+      this._floodTimerId = null;
+    }
+
+    // 发射事件结束信号
+    window.eventBus.emit('event:ended', {
+      id: event.id,
+      name: event.name,
+      icon: event.icon,
+      category: event.category,
+    });
+
+    this._activeEvent = null;
+    this._eventTimerId = null;
+  }
+
+  /** 冻结所有发射器：暂停冷却计时 */
+  _freezeEmitters() {
+    const now = Date.now();
+    for (const emitter of this.state.emitters) {
+      emitter.startFreeze(now);
+    }
+  }
+
+  /** 解冻所有发射器：恢复冷却计时 */
+  _unfreezeEmitters() {
+    const now = Date.now();
+    for (const emitter of this.state.emitters) {
+      emitter.endFreeze(now);
+    }
+  }
+
+  /**
+   * 启动元素洪流定时器：每 interval 毫秒在棋盘空位生成一个低级元素
+   */
+  _startFloodTimer() {
+    if (this._floodTimerId) {
+      clearInterval(this._floodTimerId);
+    }
+
+    const interval = this._eventCtx.floodInterval || 800;
+
+    this._floodTimerId = setInterval(() => {
+      if (!this.state.isPlaying || this.state.isPaused || !this._eventCtx.floodActive) {
+        return;
+      }
+
+      const board = this.state.board;
+      if (this.systems.spawn.isBoardFull(board)) return;
+
+      // 随机选择一个基础元素类型
+      const typeKeys = Object.keys(ELEMENT_TYPES);
+      const randomType = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+
+      const element = new Element(randomType, 1);
+      const emptyCell = this.systems.spawn.findEmptyCell(board);
+      if (!emptyCell) return;
+
+      this.systems.spawn.placeElement(board, element, emptyCell.row, emptyCell.col);
+      this.boardRenderer.updateCell(board, emptyCell.row, emptyCell.col);
+      this.boardRenderer.playSpawnAnimation(emptyCell.row, emptyCell.col);
+      // 元素洪流专属特效（水波纹+水花）
+      this.boardRenderer.playFloodEffect(emptyCell.row, emptyCell.col);
+    }, interval);
+  }
+
+  /**
+   * 生成加急订单：一个高额奖励的限时订单
+   */
+  _spawnRushOrder() {
+    // 从高级/稀有订单模板中选一个
+    const rushTemplates = ORDER_TEMPLATES.filter(t => t.difficulty === 'hard' || t.difficulty === 'rare');
+    if (rushTemplates.length === 0) return;
+
+    const template = rushTemplates[Math.floor(Math.random() * rushTemplates.length)];
+    const rushOrder = {
+      ...template,
+      id: `rush_${Date.now()}`,
+      reward: Math.floor(template.reward * 1.5), // 1.5倍奖励
+      isRush: true,
+    };
+
+    // 通过订单系统添加临时订单
+    if (this.systems.order.addRushOrder) {
+      this.systems.order.addRushOrder(rushOrder);
+    }
+
+    // 设置清理函数：事件结束时移除未完成的加急订单
+    this._eventCtx.removeRushOrder = () => {
+      if (this.systems.order.removeRushOrder) {
+        this.systems.order.removeRushOrder(rushOrder.id);
+      }
+    };
+
+    window.eventBus.emit('notification', {
+      message: `📋 加急订单！${rushOrder.reward}分限时任务`,
+      type: 'challenge',
+    });
+  }
+
+  /**
+   * 应用神秘宝箱奖励：随机从加分/消除一行/升级随机元素中选一种
+   */
+  _applyMysteryReward() {
+    const rewards = [
+      // 奖励1：直接加分
+      () => {
+        const bonus = 30 + Math.floor(Math.random() * 40); // 30~70分
+        this.state.score += bonus;
+        window.eventBus.emit('score:updated', {
+          score: this.state.score,
+          targetScore: this.state.targetScore,
+        });
+        window.eventBus.emit('notification', {
+          message: `🎁 神秘宝箱：获得 ${bonus} 额外积分！`,
+          type: 'reward',
+        });
+      },
+      // 奖励2：消除棋盘上最低级的一行
+      () => {
+        const board = this.state.board;
+        let clearedCount = 0;
+        for (let r = 0; r < board.length; r++) {
+          for (let c = 0; c < board[r].length; c++) {
+            const el = board[r][c];
+            if (el && el.level === 1) {
+              this.systems.spawn.removeElement(board, el);
+              this.boardRenderer.updateCell(board, r, c);
+              clearedCount++;
+            }
+          }
+        }
+        if (clearedCount > 0) {
+          window.eventBus.emit('notification', {
+            message: `🎁 神秘宝箱：清除了 ${clearedCount} 个初级元素！`,
+            type: 'reward',
+          });
+        } else {
+          // 没有初级元素则改为加分
+          this.state.score += 20;
+          window.eventBus.emit('score:updated', {
+            score: this.state.score,
+            targetScore: this.state.targetScore,
+          });
+          window.eventBus.emit('notification', {
+            message: '🎁 神秘宝箱：获得 20 积分！',
+            type: 'reward',
+          });
+        }
+      },
+      // 奖励3：升级一个随机元素
+      () => {
+        const board = this.state.board;
+        const occupiedCells = [];
+        for (let r = 0; r < board.length; r++) {
+          for (let c = 0; c < board[r].length; c++) {
+            if (board[r][c] && board[r][c].level < ELEMENT_LEVELS.length) {
+              occupiedCells.push({ row: r, col: c, el: board[r][c] });
+            }
+          }
+        }
+        if (occupiedCells.length > 0) {
+          const target = occupiedCells[Math.floor(Math.random() * occupiedCells.length)];
+          target.el.level += 1;
+          this.boardRenderer.updateCell(board, target.row, target.col);
+          window.eventBus.emit('notification', {
+            message: `🎁 神秘宝箱：${target.el.icon} 升级至 Lv.${target.el.level}！`,
+            type: 'reward',
+          });
+        } else {
+          this.state.score += 15;
+          window.eventBus.emit('score:updated', {
+            score: this.state.score,
+            targetScore: this.state.targetScore,
+          });
+          window.eventBus.emit('notification', {
+            message: '🎁 神秘宝箱：获得 15 积分！',
+            type: 'reward',
+          });
+        }
+      },
+    ];
+
+    // 随机选择一种奖励
+    const selected = rewards[Math.floor(Math.random() * rewards.length)];
+    selected();
+  }
+
+  // ==================== 评分评级系统 ====================
+
+  /**
+   * 重置评分数据（关卡开始时调用）
+   */
+  _resetRatingData() {
+    this._levelStartTime = Date.now();
+    this._operationCount = 0;
+    this._highestCombo = 0;
+    this._maxMergeLevel = 0;
+    this._ratingOrdersCompleted = 0;
+    this._ratingMergesCount = 0;
+  }
+
+  /**
+   * 更新评分数据
+   * @param {string} action - 'merge' | 'order' | 'move' | 'combo'
+   * @param {object} [detail] - 附加信息
+   */
+  _updateRatingData(action, detail) {
+    switch (action) {
+      case 'merge':
+        this._operationCount++;
+        this._ratingMergesCount++;
+        if (detail && detail.level > this._maxMergeLevel) {
+          this._maxMergeLevel = detail.level;
+        }
+        break;
+      case 'order':
+        this._operationCount++;
+        this._ratingOrdersCompleted++;
+        break;
+      case 'move':
+        this._operationCount++;
+        break;
+      case 'combo':
+        if (detail && detail.count > this._highestCombo) {
+          this._highestCombo = detail.count;
+        }
+        break;
+    }
+  }
+
+  /**
+   * 计算本关评级
+   * @returns {object} 完整评级数据
+   */
+  _calculateRating() {
+    const elapsedMs = Date.now() - this._levelStartTime;
+    const elapsedSec = Math.max(1, Math.floor(elapsedMs / 1000));
+
+    // === 维度一：速度评级（基于用时） ===
+    // 预期时间：每100分约60秒
+    const expectedTime = Math.max(30, (this.state.targetScore / 100) * 120);
+    const timeRatio = elapsedSec / expectedTime;
+    let speedGrade, speedLabel;
+    if (timeRatio <= 0.5) { speedGrade = 'S'; speedLabel = '闪电速度'; }
+    else if (timeRatio <= 0.8) { speedGrade = 'A'; speedLabel = '快速'; }
+    else if (timeRatio <= 1.2) { speedGrade = 'B'; speedLabel = '正常'; }
+    else if (timeRatio <= 1.8) { speedGrade = 'C'; speedLabel = '缓慢'; }
+    else { speedGrade = 'D'; speedLabel = '超时'; }
+
+    // === 维度二：连击评级 ===
+    let comboGrade, comboLabel;
+    if (this._highestCombo >= 10) { comboGrade = 'S'; comboLabel = '传说连击'; }
+    else if (this._highestCombo >= 6) { comboGrade = 'A'; comboLabel = '优秀连击'; }
+    else if (this._highestCombo >= 4) { comboGrade = 'B'; comboLabel = '良好连击'; }
+    else if (this._highestCombo >= 2) { comboGrade = 'C'; comboLabel = '基础连击'; }
+    else { comboGrade = 'D'; comboLabel = '无连击'; }
+
+    // === 维度三：效率评级（每操作得分） ===
+    const scorePerOp = this._operationCount > 0 ? this.state.score / this._operationCount : 0;
+    let efficiencyGrade, efficiencyLabel;
+    if (scorePerOp >= 15) { efficiencyGrade = 'S'; efficiencyLabel = '极致效率'; }
+    else if (scorePerOp >= 10) { efficiencyGrade = 'A'; efficiencyLabel = '高效'; }
+    else if (scorePerOp >= 6) { efficiencyGrade = 'B'; efficiencyLabel = '标准'; }
+    else if (scorePerOp >= 3) { efficiencyGrade = 'C'; efficiencyLabel = '低效'; }
+    else { efficiencyGrade = 'D'; efficiencyLabel = '混乱'; }
+
+    // === 维度四：合成评级 ===
+    let mergeGrade, mergeLabel;
+    if (this._maxMergeLevel >= 6) { mergeGrade = 'S'; mergeLabel = '传说合成'; }
+    else if (this._maxMergeLevel >= 5) { mergeGrade = 'A'; mergeLabel = '史诗合成'; }
+    else if (this._maxMergeLevel >= 4) { mergeGrade = 'B'; mergeLabel = '稀有合成'; }
+    else if (this._maxMergeLevel >= 3) { mergeGrade = 'C'; mergeLabel = '高级合成'; }
+    else { mergeGrade = 'D'; mergeLabel = '初级合成'; }
+
+    // === 综合评级 ===
+    // 将字母等级映射为分数：S=5, A=4, B=3, C=2, D=1
+    const gradeScore = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+    const totalScore = gradeScore[speedGrade] + gradeScore[comboGrade]
+                     + gradeScore[efficiencyGrade] + gradeScore[mergeGrade];
+    const avgScore = totalScore / 4;
+
+    let overallGrade, overallTitle;
+    if (avgScore >= 4.75) { overallGrade = 'S'; overallTitle = '🌟 完美通关'; }
+    else if (avgScore >= 3.75) { overallGrade = 'A'; overallTitle = '🏆 优秀'; }
+    else if (avgScore >= 2.75) { overallGrade = 'B'; overallTitle = '👍 良好'; }
+    else if (avgScore >= 1.75) { overallGrade = 'C'; overallTitle = '👌 合格'; }
+    else { overallGrade = 'D'; overallTitle = '💪 继续努力'; }
+
+    // === 星尘奖励倍率 ===
+    const stardustMultiplier = gradeScore[overallGrade] / 3;
+
+    return {
+      dimensions: {
+        speed: { grade: speedGrade, label: speedLabel, value: timeRatio },
+        combo: { grade: comboGrade, label: comboLabel, value: this._highestCombo },
+        efficiency: { grade: efficiencyGrade, label: efficiencyLabel, value: scorePerOp },
+        merge: { grade: mergeGrade, label: mergeLabel, value: this._maxMergeLevel },
+      },
+      overall: {
+        grade: overallGrade,
+        title: overallTitle,
+        score: avgScore,
+      },
+      stats: {
+        elapsedSec,
+        operationCount: this._operationCount,
+        highestCombo: this._highestCombo,
+        maxMergeLevel: this._maxMergeLevel,
+        ordersCompleted: this._ratingOrdersCompleted,
+        mergesCount: this._ratingMergesCount,
+        scorePerOp: Math.round(scorePerOp * 10) / 10,
+      },
+      stardustMultiplier,
+    };
   }
 
   /** 清空棋盘（休息关、商店购买） */
@@ -190,12 +889,22 @@ class GameEngine {
       return;
     }
 
+    // 重置为经典模式（防止之前肉鸽模式的 isRogueMode 污染）
+    this.isRogueMode = false;
+    this.currentRogueNode = null;
+
     this.state.level = level;
     this.state.targetScore = levelConfig.targetScore;
     this.state.score = 0;
     this.state.isPlaying = true;
     this.state.isPaused = false;
     this.state.levelConfig = levelConfig;
+
+    // 重置紧急事件系统
+    this._resetEventSystem();
+
+    // 重置评分数据
+    this._resetRatingData();
 
     // 清除连击超时
     if (this._comboTimeoutId) {
@@ -222,6 +931,11 @@ class GameEngine {
       return config ? new Emitter(config) : null;
     }).filter(Boolean);
 
+    // 应用祝福到发射器（如果有肉鸽祝福系统）
+    if (this.boonSystem) {
+      this.boonSystem.applyToEmitters(this.state.emitters);
+    }
+
     // 创建发射器按钮
     this.uiManager.createEmitterButtons(this.state.emitters, (emitterId) => {
       this._onEmitterClick(emitterId);
@@ -247,6 +961,10 @@ class GameEngine {
     // 启动自动存档
     this._startAutoSave();
 
+    // 初始化波次系统（肉鸽模式使用当前层数）
+    const floor = this.rogueSystem ? this.rogueSystem.getCurrentFloor() : 1;
+    this._initWaves(floor);
+
     // 隐藏弹窗
     this.uiManager.hideModal();
   }
@@ -263,9 +981,33 @@ class GameEngine {
       }
 
       // 更新发射器状态（约每秒更新4次，减少性能开销）
-      if (timestamp - this._lastFrameTime > 250) {
+      if (timestamp - this._lastFrameTime > 200) {
         window.eventBus.emit('emitters:updated', this.state.emitters);
         this._lastFrameTime = timestamp;
+      }
+
+      // === 紧急事件系统：定期检查触发（约每3秒） ===
+      if (!this._activeEvent && timestamp - this._lastEventCheckTime > 3000) {
+        this._checkEmergencyEvents();
+      }
+
+      // === 活跃事件 tick（用于倒计时更新） ===
+      if (this._activeEvent && timestamp - this._lastTickTime > 100) {
+        const now = Date.now();
+        const elapsed = now - this._eventStartTime;
+        const remainingMs = Math.max(0, this._activeEvent.durationMs - elapsed);
+        window.eventBus.emit('event:tick', {
+          remainingMs: remainingMs,
+          totalDurationMs: this._activeEvent.durationMs,
+        });
+        // 加急订单专属 tick
+        if (this._activeEvent.id === 'order_rush') {
+          window.eventBus.emit('rush-order:tick', {
+            remainingMs: remainingMs,
+            totalDurationMs: this._activeEvent.durationMs,
+          });
+        }
+        this._lastTickTime = timestamp;
       }
 
       this._gameLoopId = requestAnimationFrame(loop);
@@ -414,6 +1156,15 @@ class GameEngine {
   _onEmitterClick(emitterId) {
     if (!this.state.isPlaying || this.state.isPaused) return;
 
+    // 紧急事件：冻结状态禁止发射器工作
+    if (this._eventCtx.freezeEmitters) {
+      window.eventBus.emit('notification', {
+        message: '❄ 发射器被冻结，暂时无法使用',
+        type: 'warning',
+      });
+      return;
+    }
+
     const emitter = this.state.emitters.find((e) => e.id === emitterId);
     if (!emitter) return;
 
@@ -537,16 +1288,17 @@ class GameEngine {
         this.boardRenderer.updateCell(this.state.board, selected.row, selected.col);
         this.boardRenderer.updateCell(this.state.board, row, col);
         this.boardRenderer.deselectCell();
+        // 更新评分数据：移动操作
+        this._updateRatingData('move');
       }
       return;
     }
 
     // 点击了另一个元素：尝试合成
-    const result = this.systems.merge.tryMerge(selectedEl, clickedElement, Date.now());
-    if (result) {
-      // 检查是否拥有 boon_triple_merge 祝福
-      if (this.boonSystem && this.boonSystem.hasBoon('boon_triple_merge')) {
-        // 进入三合一模式：将两个元素标记为候选，等待第三个
+    // 检查是否拥有 boon_triple_merge 祝福（严格三合一模式）
+    if (this.boonSystem && this.boonSystem.hasBoon('boon_triple_merge')) {
+      if (Element.canMerge(selectedEl, clickedElement)) {
+        // 严格三合一：不执行二合一，直接进入三合一模式等待第三个元素
         this._tripleMergeCandidates = [
           { row: selected.row, col: selected.col, element: selectedEl },
           { row, col, element: clickedElement },
@@ -562,10 +1314,16 @@ class GameEngine {
         });
         return;
       }
-      this._executeMerge(result, selected, { row, col });
-    } else {
-      // 不能合成：切换选中到新元素
+      // 有三重奏但不能合成：切换选中到新元素
       this.boardRenderer.selectCell(row, col, this.state.board);
+    } else {
+      const result = this.systems.merge.tryMerge(selectedEl, clickedElement, Date.now());
+      if (result) {
+        this._executeMerge(result, selected, { row, col });
+      } else {
+        // 不能合成：切换选中到新元素
+        this.boardRenderer.selectCell(row, col, this.state.board);
+      }
     }
   }
 
@@ -584,7 +1342,7 @@ class GameEngine {
       thirdElement,
     ];
 
-    const newLevel = consumed[0].level + 1;
+    const newLevel = consumed[0].level + 2;
     if (newLevel > ELEMENT_LEVELS.length) {
       // 已达到最高等级，无法继续合成
       this.boardRenderer.clearTripleCandidates();
@@ -622,8 +1380,8 @@ class GameEngine {
     // 清除三合一状态
     this._tripleMergeCandidates = [];
 
-    // 计算积分
-    const scoreGain = merged.scoreValue;
+    // 计算积分（应用紧急事件倍率）
+    const scoreGain = Math.floor(merged.scoreValue * this._eventCtx.scoreMultiplier);
     this.state.score += scoreGain;
 
     // 应用额外积分加成
@@ -638,6 +1396,9 @@ class GameEngine {
       score: this.state.score,
       targetScore: this.state.targetScore,
     });
+
+    // 每次三合一后独立检查是否达标
+    this._checkScoreComplete();
 
     window.eventBus.emit('notification', {
       message: `🎵 三重奏！${consumed[0].icon} ×3 → ${merged.icon} Lv.${merged.level} ${merged.name}`,
@@ -659,10 +1420,14 @@ class GameEngine {
       }
     }
 
-    // 检查是否达成目标
-    if (this.state.score >= this.state.targetScore) {
-      this._checkLevelComplete();
-    }
+    // 更新评分数据：三合一合成
+    this._updateRatingData('merge', { level: newLevel });
+
+    // 记录合成次数并检查波次进度
+    this._totalMergesCount++;
+    this._checkWaveProgress();
+    // 合成后有机会触发紧急事件
+    this._checkEmergencyEvents();
   }
 
   /** 执行合成操作 */
@@ -693,6 +1458,8 @@ class GameEngine {
 
     // 检查连击里程碑（5/10/20连击）
     this._checkComboMilestone(comboCount);
+    // 更新评分数据：连击
+    this._updateRatingData('combo', { count: comboCount });
 
     // 设置连击超时：若 COMBO_WINDOW_MS 内无新合成，触发 Combo Break
     if (this._comboTimeoutId) {
@@ -702,6 +1469,8 @@ class GameEngine {
       this._comboTimeoutId = null;
       this.systems.merge.resetCombo();
       window.eventBus.emit('combo:break', {});
+      // 连击中断是触发紧急事件的好时机
+      this._checkEmergencyEvents();
     }, this.systems.merge.COMBO_WINDOW_MS);
 
     // 通知合成事件
@@ -737,10 +1506,32 @@ class GameEngine {
       }
     }
 
+    // 每次合成后独立检查是否达标（不受祝福/波次进度限制）
+    this._checkScoreComplete();
+
+    // === 连击狂热：合成积分增长补充特效 ===
+    if (this._activeEvent && this._activeEvent.id === 'combo_fever') {
+      window.eventBus.emit('combo-fever:score-bonus', {
+        row: toPos.row,
+        col: toPos.col,
+        score: merged.scoreValue,
+        multiplier: comboMultiplier,
+      });
+    }
+
     // === 肉鸽祝福：元素共鸣（传说级）===
     if (this.boonSystem && this.boonSystem.hasBoon('boon_element_resonance')) {
       this._triggerElementResonance(merged);
     }
+
+    // 更新评分数据：普通合成
+    this._updateRatingData('merge', { level: merged.level });
+
+    // 记录合成次数并检查波次进度
+    this._totalMergesCount++;
+    this._checkWaveProgress();
+    // 合成后有机会触发紧急事件
+    this._checkEmergencyEvents();
   }
 
   /** 检查连击里程碑：5/10/20连击 */
@@ -874,6 +1665,8 @@ class GameEngine {
       }
     }
     reward = Math.floor(reward);
+    // 应用紧急事件积分倍率
+    reward = Math.floor(reward * this._eventCtx.scoreMultiplier);
     this.state.score += reward;
 
     // === 肉鸽诅咒：贪婪代价 ===
@@ -905,13 +1698,19 @@ class GameEngine {
       targetScore: this.state.targetScore,
     });
 
+    this._checkScoreComplete();
+
     // 刷新棋盘
     this.boardRenderer.renderAll(this.state.board);
 
-    // 检查是否通关
-    if (this.state.score >= this.state.targetScore) {
-      this._onLevelComplete();
-    }
+    // 更新评分数据：订单完成
+    this._updateRatingData('order');
+
+    // 记录订单完成数并检查波次进度
+    this._totalOrdersCompleted++;
+    this._checkWaveProgress();
+    // 订单提交后有机会触发紧急事件
+    this._checkEmergencyEvents();
   }
 
   /** 通关处理 */
@@ -921,6 +1720,36 @@ class GameEngine {
     this._stopAutoSave();
     this._stopAutoSort();
 
+    // 清理紧急事件
+    if (this._activeEvent) {
+      this._endActiveEvent();
+    }
+    this._resetEventSystem();
+
+    // 清除连击超时，防止通关后 combo break 触发紧急事件
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+      this._comboTimeoutId = null;
+    }
+
+    // 计算本关评级
+    const rating = this._calculateRating();
+
+    // 计算下一关信息
+    const nextLevel = this.state.level + 1;
+    const hasNextLevel = LEVEL_CONFIGS.some((c) => c.level === nextLevel);
+
+    // 发射评级事件（携带完整数据供UI展示、按钮回调、MetaProgress记录）
+    window.eventBus.emit('rating:calculated', {
+      level: this.state.level,
+      score: this.state.score,
+      targetScore: this.state.targetScore,
+      rating,
+      isRogue: this.isRogueMode,
+      nextLevel: hasNextLevel ? nextLevel : null,
+      isLastLevel: !hasNextLevel,
+    });
+
     // 肉鸽模式：通过事件系统通知主流程
     if (this.isRogueMode) {
       window.eventBus.emit('game:over', {
@@ -928,28 +1757,9 @@ class GameEngine {
         score: this.state.score,
         targetScore: this.state.targetScore,
         isRogue: true,
+        rating,
       });
       return;
-    }
-
-    // 经典模式：检查是否有下一关
-    const nextLevel = this.state.level + 1;
-    const hasNextLevel = LEVEL_CONFIGS.some((c) => c.level === nextLevel);
-
-    if (hasNextLevel) {
-      this.uiManager.setModalButtonCallback(() => {
-        this.startLevel(nextLevel);
-      });
-      window.eventBus.emit('game:over', {
-        level: this.state.level,
-        score: this.state.score,
-        nextLevel,
-      });
-    } else {
-      this.uiManager.setModalButtonCallback(() => {
-        this.startLevel(1);
-      });
-      this.uiManager.showModal('🏆 恭喜通关全部关卡！', '你已经完成了所有关卡！<br>点击按钮重新开始。');
     }
   }
 
@@ -1059,6 +1869,16 @@ class GameEngine {
     this._stopGameLoop();
     this._stopAutoSave();
     this._stopAutoSort();
+    // 清理紧急事件定时器
+    if (this._eventTimerId) {
+      clearTimeout(this._eventTimerId);
+      this._eventTimerId = null;
+    }
+    if (this._floodTimerId) {
+      clearInterval(this._floodTimerId);
+      this._floodTimerId = null;
+    }
+    this._activeEvent = null;
     // 清除连击超时
     if (this._comboTimeoutId) {
       clearTimeout(this._comboTimeoutId);

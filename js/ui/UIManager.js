@@ -12,6 +12,9 @@ class UIManager {
     this.orderCards = [];
     // 进度横幅阈值跟踪（避免重复触发）
     this._lastProgressPercent = 0;
+    // 横幅队列系统：确保多个横幅依次显示，不冲突
+    this._bannerQueue = [];
+    this._isBannerShowing = false;
   }
 
   /**
@@ -89,9 +92,8 @@ class UIManager {
     });
 
     window.eventBus.on('game:over', (data) => {
-      // 肉鸽模式不显示经典通关弹窗，由肉鸽UI接管
-      if (data && data.isRogue) return;
-      this.showModal('🎉 恭喜通关！', `你成功完成了第 ${data.level} 关！<br>最终得分：${data.score}`);
+      // 仅处理肉鸽模式的 game:over（由 RogueUIManager 接管）
+      // 经典模式已由 rating:complete 事件通过评级面板处理
     });
 
     window.eventBus.on('game:failed', (data) => {
@@ -106,6 +108,64 @@ class UIManager {
     window.eventBus.on('notification', (data) => {
       this.showNotification(data.message, data.type);
     });
+
+    // === 波次系统事件 ===
+    window.eventBus.on('wave:started', (data) => {
+      this.showWaveBanner(data);
+      this.updateWaveProgress(data);
+    });
+    window.eventBus.on('wave:completed', (data) => {
+      this.showWaveCompletionEffect(data);
+    });
+    window.eventBus.on('wave:progress', (data) => {
+      this.updateWaveProgress(data);
+    });
+
+    // === 紧急事件系统事件 ===
+    window.eventBus.on('event:started', (data) => {
+      this.showEventBanner(data);
+      // 冻结事件：给发射器添加冰冻特效
+      if (data.id === 'freeze') {
+        this.applyFreezeEffect(true);
+      }
+      // 加速生产：给发射器添加加速特效
+      if (data.id === 'speed_up') {
+        this.applySpeedUpEffect(true);
+      }
+    });
+    window.eventBus.on('event:ended', (data) => {
+      this.hideEventBanner(data);
+      // 冻结事件结束：移除冰冻特效
+      if (data.id === 'freeze') {
+        this.applyFreezeEffect(false);
+      }
+      // 加速生产结束：移除加速特效
+      if (data.id === 'speed_up') {
+        this.applySpeedUpEffect(false);
+      }
+      // 加急订单结束：添加消失动画
+      if (data.id === 'order_rush') {
+        this.removeRushOrderCards();
+      }
+    });
+    window.eventBus.on('event:tick', (data) => {
+      this.updateEventTimer(data);
+    });
+    // 加急订单倒计时 tick
+    window.eventBus.on('rush-order:tick', (data) => {
+      this.updateRushOrderTimers(data);
+    });
+    // 连击狂热：合成积分增长补充特效
+    window.eventBus.on('combo-fever:score-bonus', (data) => {
+      this.showComboFeverScoreEffect(data);
+    });
+
+    // === 评级系统事件 ===
+    window.eventBus.on('rating:calculated', (data) => {
+      this.showRatingPanel(data);
+    });
+
+    // 按钮回调已由 showRatingPanel 直接处理，无需独立事件
   }
 
   /**
@@ -137,56 +197,17 @@ class UIManager {
       nameSpan.textContent = emitter.name;
       btn.appendChild(nameSpan);
 
-      // 冷却环 SVG（替代原有的 cooldown-bar）
-      const ringContainer = document.createElement('div');
-      ringContainer.className = 'cooldown-ring-container';
+      // 冷却进度条（整个按钮作为背景，从左到右填充）
+      const cooldownBar = document.createElement('div');
+      cooldownBar.className = 'emitter-cooldown-bar';
+      cooldownBar.style.width = '0%';
+      btn.appendChild(cooldownBar);
 
-      const svgNS = 'http://www.w3.org/2000/svg';
-      const svg = document.createElementNS(svgNS, 'svg');
-      svg.setAttribute('class', 'cooldown-ring-svg');
-      svg.setAttribute('viewBox', '0 0 40 40');
-
-      // 渐变定义
-      const defs = document.createElementNS(svgNS, 'defs');
-      const gradient = document.createElementNS(svgNS, 'linearGradient');
-      gradient.setAttribute('id', `cooldownGradient_${emitter.id}`);
-      gradient.setAttribute('x1', '0%');
-      gradient.setAttribute('y1', '0%');
-      gradient.setAttribute('x2', '100%');
-      gradient.setAttribute('y2', '100%');
-      const stop1 = document.createElementNS(svgNS, 'stop');
-      stop1.setAttribute('offset', '0%');
-      stop1.setAttribute('stop-color', '#2196f3');
-      const stop2 = document.createElementNS(svgNS, 'stop');
-      stop2.setAttribute('offset', '100%');
-      stop2.setAttribute('stop-color', '#4caf50');
-      gradient.appendChild(stop1);
-      gradient.appendChild(stop2);
-      defs.appendChild(gradient);
-      svg.appendChild(defs);
-
-      // 背景圆环
-      const bgCircle = document.createElementNS(svgNS, 'circle');
-      bgCircle.setAttribute('class', 'cooldown-ring-bg');
-      bgCircle.setAttribute('cx', '20');
-      bgCircle.setAttribute('cy', '20');
-      bgCircle.setAttribute('r', '17');
-      svg.appendChild(bgCircle);
-
-      // 进度圆环
-      const fillCircle = document.createElementNS(svgNS, 'circle');
-      fillCircle.setAttribute('class', 'cooldown-ring-fill');
-      fillCircle.setAttribute('cx', '20');
-      fillCircle.setAttribute('cy', '20');
-      fillCircle.setAttribute('r', '17');
-      fillCircle.setAttribute('stroke', `url(#cooldownGradient_${emitter.id})`);
-      const circumference = 2 * Math.PI * 17;
-      fillCircle.style.strokeDasharray = `${circumference}`;
-      fillCircle.style.strokeDashoffset = '0';
-      svg.appendChild(fillCircle);
-
-      ringContainer.appendChild(svg);
-      btn.appendChild(ringContainer);
+      // 倒计时数字文本
+      const timerText = document.createElement('span');
+      timerText.className = 'cooldown-timer-text';
+      timerText.textContent = '';
+      btn.appendChild(timerText);
 
       // 点击事件
       btn.addEventListener('click', () => {
@@ -198,9 +219,9 @@ class UIManager {
         element: btn,
         emitterId: emitter.id,
         cooldownFill: null,
-        cooldownRing: fillCircle,
-        circumference: circumference,
+        cooldownBar: cooldownBar,
         iconEl: iconSpan,
+        timerText: timerText,
       });
     }
   }
@@ -216,10 +237,31 @@ class UIManager {
 
       const progress = emitter.getCooldownProgress(now);
 
-      // 更新冷却环
-      if (btnData.cooldownRing) {
-        const offset = btnData.circumference * (1 - progress);
-        btnData.cooldownRing.style.strokeDashoffset = String(offset);
+      // 更新冷却进度条（整个按钮背景，从左到右）
+      if (btnData.cooldownBar) {
+        const pct = Math.round(progress * 100);
+        btnData.cooldownBar.style.width = `${pct}%`;
+        // 颜色随进度变化：红色→橙色→绿色
+        if (progress < 0.33) {
+          btnData.cooldownBar.style.background = 'linear-gradient(90deg, #ef5350, #ff7043)';
+        } else if (progress < 0.66) {
+          btnData.cooldownBar.style.background = 'linear-gradient(90deg, #ff7043, #ffa726)';
+        } else {
+          btnData.cooldownBar.style.background = 'linear-gradient(90deg, #66bb6a, #43a047)';
+        }
+      }
+
+      // 更新倒计时数字
+      if (btnData.timerText) {
+        if (progress < 1) {
+          const remainingMs = emitter.getActualCooldown() * (1 - progress);
+          const remainingSec = Math.ceil(remainingMs / 1000);
+          btnData.timerText.textContent = remainingSec > 0 ? `${remainingSec}s` : '';
+          btnData.timerText.style.display = 'block';
+        } else {
+          btnData.timerText.textContent = '';
+          btnData.timerText.style.display = 'none';
+        }
       }
 
       if (progress >= 1) {
@@ -317,6 +359,26 @@ class UIManager {
       diffSpan.textContent = diffLabels[order.difficulty] || order.difficulty;
       card.appendChild(diffSpan);
 
+      // 加急订单：添加倒计时进度条
+      if (order.isRush) {
+        const rushBarContainer = document.createElement('div');
+        rushBarContainer.className = 'rush-order-bar-container';
+        
+        const rushBar = document.createElement('div');
+        rushBar.className = 'rush-order-bar';
+        rushBar.id = `rush-bar-${order.id}`;
+        rushBarContainer.appendChild(rushBar);
+        
+        const rushTimer = document.createElement('span');
+        rushTimer.className = 'rush-order-timer';
+        rushTimer.id = `rush-timer-${order.id}`;
+        rushTimer.textContent = '';
+        rushBarContainer.appendChild(rushTimer);
+        
+        card.appendChild(rushBarContainer);
+        card.classList.add('order-card-rush');
+      }
+
       card.addEventListener('click', () => {
         window.eventBus.emit('ui:order-clicked', order.id);
       });
@@ -337,65 +399,23 @@ class UIManager {
   }
 
   /**
-   * 更新连击显示（棋盘上方 + 头部）
-   * 合成时数字跳动放大(scale 1→1.3→1)，连击为0时隐藏
+   * 更新连击显示（改为横幅形式，从顶部滑入）
+   * 合成时显示连击横幅，连击为0时不显示
    */
   updateCombo(count, multiplier) {
-    const comboDisplay = this.elements['board-combo-display'];
-    const countText = this.elements['board-combo-count-text'];
-    const multiplierText = this.elements['board-combo-multiplier-text'];
-
-    if (!comboDisplay) return;
-
-    if (count >= 1) {
-      // 更新文本：count>1 时加火焰图标
-      const prefix = count > 1 ? '🔥 ' : '';
-      countText.textContent = `${prefix}${count}连击`;
-      multiplierText.textContent = `x${multiplier.toFixed(1)}`;
-
-      // 显示面板
-      comboDisplay.style.display = 'inline-flex';
-
-      // 移除之前的动画类
-      comboDisplay.classList.remove('combo-break');
-
-      // 每次连击更新都触发跳动动画（仅 count > 1 时有视觉冲击）
-      if (count > 1) {
-        comboDisplay.classList.remove('combo-jump');
-        // 强制回流以重新触发动画
-        void comboDisplay.offsetWidth;
-        comboDisplay.classList.add('combo-jump');
-      }
-    } else {
-      // 连击为0时隐藏
-      comboDisplay.style.display = 'none';
+    if (count >= 2) {
+      // 连击≥2时显示横幅
+      this._enqueueBanner(`🔥 ${count}连击`, `x${multiplier.toFixed(1)}`, 'combo-banner', 1200);
     }
+    // count=0或1时不显示横幅（首次合成不弹）
   }
 
   /**
-   * 显示 Combo Break 红色闪烁效果
-   * 连击中断时触发，闪烁后自动隐藏
+   * 显示 Combo Break 红色闪烁效果（改为横幅形式）
+   * 连击中断时触发
    */
   _showComboBreak() {
-    const comboDisplay = this.elements['board-combo-display'];
-    const countText = this.elements['board-combo-count-text'];
-    const multiplierText = this.elements['board-combo-multiplier-text'];
-
-    if (!comboDisplay || comboDisplay.style.display === 'none') return;
-
-    // 切换为 Break 文本
-    countText.textContent = '💥 Combo Break!';
-    multiplierText.textContent = '';
-
-    // 移除跳动动画，应用 Break 闪烁动画
-    comboDisplay.classList.remove('combo-jump');
-    comboDisplay.classList.add('combo-break');
-
-    // 动画结束后隐藏
-    setTimeout(() => {
-      comboDisplay.style.display = 'none';
-      comboDisplay.classList.remove('combo-break');
-    }, 700);
+    this._enqueueBanner('💥 Combo Break!', '', 'combo-break-banner', 1000);
   }
 
   /**
@@ -503,58 +523,18 @@ class UIManager {
 
   /**
    * 显示进度横幅：从顶部滑入，停留1.5秒后滑出
+   * 通过横幅队列管理，避免与连击横幅冲突
    * @param {number} percent - 25 | 50 | 75 | 100
    */
   showProgressBanner(percent) {
-    // 移除旧横幅
-    const oldContainer = document.getElementById('progress-banner-container');
-    if (oldContainer && oldContainer.parentNode) {
-      oldContainer.parentNode.removeChild(oldContainer);
-    }
-
     const bannerData = {
       25: { icon: '🌱', text: '征程起步 · 已完成 25%' },
       50: { icon: '🔥', text: '半程冲刺 · 已完成 50%' },
       75: { icon: '⚡', text: '胜利在望 · 已完成 75%' },
       100: { icon: '🏆', text: '🎉 目标达成 · 100% 完成！' },
     };
-
     const data = bannerData[percent] || { icon: '📊', text: `进度 ${percent}%` };
-
-    // 创建容器
-    const container = document.createElement('div');
-    container.id = 'progress-banner-container';
-    container.className = 'progress-banner-container';
-
-    const banner = document.createElement('div');
-    banner.className = `progress-banner progress-banner-${percent}`;
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'progress-banner-icon';
-    iconSpan.textContent = data.icon;
-    banner.appendChild(iconSpan);
-
-    const textSpan = document.createElement('span');
-    textSpan.className = 'progress-banner-text';
-    textSpan.textContent = data.text;
-    banner.appendChild(textSpan);
-
-    container.appendChild(banner);
-    document.body.appendChild(container);
-
-    // 强制回流后滑入
-    void container.offsetWidth;
-    container.classList.add('show');
-
-    // 停留1.5秒后滑出
-    setTimeout(() => {
-      container.classList.remove('show');
-      container.classList.add('hide');
-      // 动画结束后移除DOM
-      setTimeout(() => {
-        if (container.parentNode) container.parentNode.removeChild(container);
-      }, 500);
-    }, 1500);
+    this._enqueueBanner(data.text, data.icon, `progress-banner-${percent}`, 1500);
   }
 
   /**
@@ -860,5 +840,510 @@ class UIManager {
         flash.parentNode.removeChild(flash);
       }
     }, duration + 200);
+  }
+
+  // ==================== 波次系统 UI ====================
+
+  /**
+   * 显示波次开始横幅
+   * @param {object} data - { waveIndex, totalWaves, config: { type, target, label, reward } }
+   */
+  showWaveBanner(data) {
+    const oldContainer = document.getElementById('wave-banner-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+
+    const waveNum = data.waveIndex + 1;
+    const total = data.totalWaves;
+    const config = data.config || {};
+    const reward = config.reward || {};
+
+    // 构建奖励文本
+    let rewardText = '';
+    if (reward.points) rewardText += `+${reward.points}分`;
+    if (reward.speedBoost) rewardText += ` · 加速${reward.speedBoost}s`;
+    if (reward.extraSlot) rewardText += ` · +${reward.extraSlot}槽位`;
+
+    const container = document.createElement('div');
+    container.id = 'wave-banner-container';
+    container.className = 'wave-banner-container';
+
+    const banner = document.createElement('div');
+    banner.className = `wave-banner wave-banner-${config.type || 'normal'}`;
+
+    banner.innerHTML = `
+      <div class="wave-banner-header">
+        <span class="wave-banner-icon">🌊</span>
+        <span class="wave-banner-title">第 ${waveNum}/${total} 波</span>
+      </div>
+      <div class="wave-banner-label">${config.label || ''}</div>
+      <div class="wave-banner-target">目标：${config.target || ''}</div>
+      ${rewardText ? `<div class="wave-banner-reward">奖励：${rewardText}</div>` : ''}
+    `;
+
+    container.appendChild(banner);
+    document.body.appendChild(container);
+
+    void container.offsetWidth;
+    container.classList.add('show');
+
+    // 3秒后自动滑出
+    setTimeout(() => {
+      container.classList.remove('show');
+      container.classList.add('hide');
+      setTimeout(() => {
+        if (container.parentNode) container.parentNode.removeChild(container);
+      }, 500);
+    }, 3000);
+  }
+
+  /**
+   * 更新波次进度条
+   * @param {object} data - { waveIndex, totalWaves, progress, current, target, config }
+   */
+  updateWaveProgress(data) {
+    let bar = document.getElementById('wave-progress-bar');
+    let label = document.getElementById('wave-progress-label');
+
+    if (!bar) {
+      // 创建波次进度条容器（放在积分显示下方）
+      const scoreDisplay = this.elements['score-display'];
+      if (!scoreDisplay) return;
+      const parent = scoreDisplay.closest('.score-section') || scoreDisplay.parentElement;
+      if (!parent) return;
+
+      const container = document.createElement('div');
+      container.id = 'wave-progress-container';
+      container.className = 'wave-progress-container';
+
+      label = document.createElement('div');
+      label.id = 'wave-progress-label';
+      label.className = 'wave-progress-label';
+      container.appendChild(label);
+
+      const track = document.createElement('div');
+      track.className = 'wave-progress-track';
+
+      bar = document.createElement('div');
+      bar.id = 'wave-progress-bar';
+      bar.className = 'wave-progress-fill';
+      track.appendChild(bar);
+
+      container.appendChild(track);
+      parent.appendChild(container);
+    }
+
+    const waveNum = data.waveIndex + 1;
+    const total = data.totalWaves;
+    const pct = Math.min((data.progress || 0), 100);
+
+    bar.style.width = `${pct}%`;
+    label.textContent = `🌊 第 ${waveNum}/${total} 波 · ${data.current || 0}/${data.target || 0} (${Math.round(pct)}%)`;
+  }
+
+  /**
+   * 显示波次完成特效
+   * @param {object} data - { waveIndex, totalWaves, config, reward }
+   */
+  showWaveCompletionEffect(data) {
+    const waveNum = data.waveIndex + 1;
+    const total = data.totalWaves;
+    const reward = data.reward || {};
+
+    let rewardText = '';
+    if (reward.points) rewardText += `+${reward.points}分`;
+    if (reward.speedBoost) rewardText += ` · 加速${reward.speedBoost}s`;
+    if (reward.extraSlot) rewardText += ` · +${reward.extraSlot}槽位`;
+
+    window.eventBus.emit('notification', {
+      message: `✅ 第 ${waveNum}/${total} 波完成！${rewardText ? '奖励：' + rewardText : ''}`,
+      type: 'success',
+    });
+
+    // 最后一波完成时特殊提示
+    if (data.waveIndex === total - 1) {
+      window.eventBus.emit('notification', {
+        message: '🏁 所有波次已完成！继续冲击最高分！',
+        type: 'milestone',
+      });
+    }
+  }
+
+  // ==================== 紧急事件系统 UI ====================
+
+  /**
+   * 显示紧急事件横幅（滑入 + 倒计时闪烁）
+   * @param {object} data - { eventId, eventKey, config: { name, icon, description, duration } }
+   */
+  showEventBanner(data) {
+    const oldContainer = document.getElementById('event-banner-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+
+    // 直接从 data 读取事件字段（GameEngine 发射时放在顶层）
+    const eventName = data.name || '未知事件';
+    const eventIcon = data.icon || '⚠';
+    const eventDesc = data.description || '';
+    const eventKey = data.id || 'unknown';
+    const duration = Math.max(1, Math.ceil((data.durationMs || 10000) / 1000));
+
+    const container = document.createElement('div');
+    container.id = 'event-banner-container';
+    container.className = 'event-banner-container';
+
+    const banner = document.createElement('div');
+    banner.className = `event-banner event-banner-${eventKey}`;
+
+    banner.innerHTML = `
+      <div class="event-banner-header">
+        <span class="event-banner-icon">${eventIcon}</span>
+        <span class="event-banner-name">${eventName}</span>
+      </div>
+      <div class="event-banner-desc">${eventDesc}</div>
+      <div class="event-banner-timer">
+        <span class="event-timer-icon">⏱</span>
+        <span id="event-countdown-text" class="event-countdown-text">${duration}s</span>
+      </div>
+    `;
+
+    container.appendChild(banner);
+    document.body.appendChild(container);
+
+    void container.offsetWidth;
+    container.classList.add('show');
+
+    // 倒计时闪烁效果
+    const timerEl = document.getElementById('event-countdown-text');
+    if (timerEl) {
+      timerEl.classList.add('countdown-flash');
+    }
+  }
+  hideEventBanner() {
+    const container = document.getElementById('event-banner-container');
+    if (!container) return;
+
+    container.classList.remove('show');
+    container.classList.add('hide');
+
+    setTimeout(() => {
+      if (container.parentNode) container.parentNode.removeChild(container);
+    }, 500);
+  }
+
+  /**
+   * 应用/移除发射器冰冻特效
+   * @param {boolean} active - true=冻结，false=解冻
+   */
+  applyFreezeEffect(active) {
+    for (const btnData of this.emitterButtons) {
+      if (active) {
+        btnData.element.classList.add('emitter-frozen');
+      } else {
+        btnData.element.classList.remove('emitter-frozen');
+      }
+    }
+  }
+
+  /**
+   * 更新加急订单倒计时进度条
+   * @param {object} data - { remainingMs, totalDurationMs }
+   */
+  updateRushOrderTimers(data) {
+    const progress = Math.max(0, Math.min(1, data.remainingMs / data.totalDurationMs));
+    const remainingSec = Math.ceil(data.remainingMs / 1000);
+    
+    // 遍历所有订单卡片，更新加急订单的进度条
+    for (const card of this.orderCards) {
+      const bar = card.querySelector('.rush-order-bar');
+      const timer = card.querySelector('.rush-order-timer');
+      if (bar && timer) {
+        bar.style.width = `${progress * 100}%`;
+        timer.textContent = `${remainingSec}s`;
+        // 最后3秒变红
+        if (remainingSec <= 3) {
+          bar.classList.add('rush-order-bar-urgent');
+        } else {
+          bar.classList.remove('rush-order-bar-urgent');
+        }
+      }
+    }
+  }
+
+  /**
+   * 应用/移除发射器加速特效
+   * @param {boolean} active - true=加速，false=恢复
+   */
+  applySpeedUpEffect(active) {
+    for (const btnData of this.emitterButtons) {
+      if (active) {
+        btnData.element.classList.add('emitter-speed-up');
+      } else {
+        btnData.element.classList.remove('emitter-speed-up');
+      }
+    }
+  }
+
+  /**
+   * 显示连击狂热积分增长特效（合成位置火焰爆发）
+   * @param {object} data - { row, col, score, multiplier }
+   */
+  showComboFeverScoreEffect(data) {
+    const cell = document.querySelector(`[data-row="${data.row}"][data-col="${data.col}"] .element-icon`);
+    if (!cell) return;
+
+    const rect = cell.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    // 创建 "🔥 x3" 标签
+    const label = document.createElement('div');
+    label.className = 'combo-fever-label';
+    label.textContent = `🔥 x${data.multiplier}`;
+    label.style.left = `${cx}px`;
+    label.style.top = `${cy - 10}px`;
+    document.body.appendChild(label);
+
+    // 创建额外积分数字
+    const bonusEl = document.createElement('div');
+    bonusEl.className = 'combo-fever-bonus';
+    const bonusScore = Math.floor(data.score * (data.multiplier - 1));
+    bonusEl.textContent = `+${bonusScore}`;
+    bonusEl.style.left = `${cx}px`;
+    bonusEl.style.top = `${cy + 20}px`;
+    document.body.appendChild(bonusEl);
+
+    // 创建火焰粒子
+    const colors = ['#ff4500', '#ff6347', '#ff8c00', '#ffd700'];
+    for (let i = 0; i < 8; i++) {
+      const particle = document.createElement('div');
+      particle.className = 'combo-fever-particle';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 25 + Math.random() * 35;
+      particle.style.left = `${cx}px`;
+      particle.style.top = `${cy}px`;
+      particle.style.setProperty('--fx', `${Math.cos(angle) * dist}px`);
+      particle.style.setProperty('--fy', `${Math.sin(angle) * dist}px`);
+      particle.style.background = colors[i % colors.length];
+      particle.style.animationDelay = `${i * 0.04}s`;
+      document.body.appendChild(particle);
+      setTimeout(() => {
+        if (particle.parentNode) particle.parentNode.removeChild(particle);
+      }, 800);
+    }
+
+    // 动画结束后移除DOM
+    setTimeout(() => {
+      if (label.parentNode) label.parentNode.removeChild(label);
+      if (bonusEl.parentNode) bonusEl.parentNode.removeChild(bonusEl);
+    }, 1000);
+  }
+
+  // ==================== 横幅队列系统 ====================
+
+  /**
+   * 将横幅加入队列，依次显示
+   * @param {string} text - 主文本
+   * @param {string} subtext - 副文本
+   * @param {string} typeClass - CSS类名
+   * @param {number} duration - 显示时长(ms)
+   */
+  _enqueueBanner(text, subtext, typeClass, duration) {
+    this._bannerQueue.push({ text, subtext, typeClass, duration });
+    this._processBannerQueue();
+  }
+
+  /** 处理横幅队列：一次只显示一个 */
+  _processBannerQueue() {
+    if (this._isBannerShowing || this._bannerQueue.length === 0) return;
+    this._isBannerShowing = true;
+    const item = this._bannerQueue.shift();
+    this._showBanner(item.text, item.subtext, item.typeClass, item.duration);
+  }
+
+  /**
+   * 实际渲染横幅
+   */
+  _showBanner(text, subtext, typeClass, duration) {
+    // 移除旧横幅
+    const oldContainer = document.getElementById('game-banner-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+
+    const container = document.createElement('div');
+    container.id = 'game-banner-container';
+    container.className = 'game-banner-container';
+
+    const banner = document.createElement('div');
+    banner.className = `game-banner ${typeClass}`;
+
+    let html = `<span class="banner-text">${text}</span>`;
+    if (subtext) {
+      html += `<span class="banner-subtext">${subtext}</span>`;
+    }
+    banner.innerHTML = html;
+    container.appendChild(banner);
+    document.body.appendChild(container);
+
+    // 触发入场动画
+    void container.offsetWidth;
+    container.classList.add('show');
+
+    // 定时隐藏
+    setTimeout(() => {
+      container.classList.remove('show');
+      container.classList.add('hide');
+      setTimeout(() => {
+        if (container.parentNode) container.parentNode.removeChild(container);
+        this._isBannerShowing = false;
+        this._processBannerQueue();
+      }, 400);
+    }, duration);
+  }
+
+  /**
+   * 加急订单结束：添加消失动画并移除
+   */
+  removeRushOrderCards() {
+    for (const card of this.orderCards) {
+      if (card.classList.contains('order-card-rush')) {
+        card.classList.add('order-card-disappear');
+        // 动画结束后移除卡片
+        setTimeout(() => {
+          if (card.parentNode) {
+            card.parentNode.removeChild(card);
+          }
+        }, 400);
+      }
+    }
+  }
+
+  /**
+   * 更新事件倒计时
+   * @param {object} data - { remainingMs, totalDurationMs }
+   */
+  updateEventTimer(data) {
+    const timerEl = document.getElementById('event-countdown-text');
+    if (!timerEl) return;
+
+    const remainingSec = Math.max(0, Math.ceil(data.remainingMs / 1000));
+    timerEl.textContent = `${remainingSec}s`;
+
+    // 最后3秒加速闪烁
+    if (remainingSec <= 3) {
+      timerEl.classList.add('countdown-urgent');
+    }
+  }
+
+  // ==================== 评级结算面板 ====================
+
+  /**
+   * 显示评级结算面板
+   * @param {object} data - { level, score, targetScore, rating: { dimensions: {...}, overall: {...}, stats: {...}, stardustMultiplier } }
+   */
+  showRatingPanel(data) {
+    const overlay = this.elements['game-overlay'];
+    const modalTitle = this.elements['modal-title'];
+    const modalBody = this.elements['modal-body'];
+
+    if (!overlay || !modalBody) return;
+
+    const rating = data.rating || {};
+    const dims = rating.dimensions || {};
+    const overall = rating.overall || {};
+    const stats = rating.stats || {};
+    const multiplier = rating.stardustMultiplier || 0;
+
+    // 维度评级映射
+    const dimConfigs = [
+      { key: 'speed', icon: '⚡', label: '速度', desc: '通关用时' },
+      { key: 'combo', icon: '🔥', label: '连击', desc: '最高连击' },
+      { key: 'efficiency', icon: '🎯', label: '效率', desc: '每操作得分' },
+      { key: 'merge', icon: '💎', label: '合成', desc: '最高合成等级' },
+    ];
+
+    // 综合评级颜色映射
+    const gradeColors = {
+      S: '#ffd700',
+      A: '#4caf50',
+      B: '#2196f3',
+      C: '#ff9800',
+      D: '#9e9e9e',
+    };
+
+    const overallColor = gradeColors[overall.grade] || '#fff';
+    const gradeEmojis = { S: '🌟', A: '👏', B: '👍', C: '💪', D: '📈' };
+    const emoji = gradeEmojis[overall.grade] || '🎮';
+
+    // 构建维度卡片HTML
+    let dimsHtml = '';
+    for (const cfg of dimConfigs) {
+      const dim = dims[cfg.key] || {};
+      const color = gradeColors[dim.grade] || '#888';
+      dimsHtml += `
+        <div class="rating-dim-card">
+          <div class="rating-dim-header">
+            <span class="rating-dim-icon">${cfg.icon}</span>
+            <span class="rating-dim-label">${cfg.label}</span>
+            <span class="rating-dim-desc">${cfg.desc}</span>
+          </div>
+          <div class="rating-dim-value" style="color:${color}">
+            <span class="rating-dim-grade">${dim.grade || '-'}</span>
+            <span class="rating-dim-subtitle">${dim.label || ''}</span>
+          </div>
+          <div class="rating-dim-bar">
+            <div class="rating-dim-fill" style="width:${dim.score || 0}%;background:${color}"></div>
+          </div>
+        </div>`;
+    }
+
+    modalTitle.textContent = `${emoji} 关卡结算 · 第 ${data.level} 关`;
+
+    modalBody.innerHTML = `
+      <div class="rating-panel">
+        <!-- 综合评级 -->
+        <div class="rating-overall" style="border-color:${overallColor}">
+          <div class="rating-overall-grade" style="color:${overallColor}">${overall.grade || '-'}</div>
+          <div class="rating-overall-title">${overall.title || ''}</div>
+          <div class="rating-overall-score">得分：${data.score} / ${data.targetScore}</div>
+          <div class="rating-stardust-multiplier">
+            星尘倍率：<span style="color:${overallColor};font-weight:bold">x${multiplier.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <!-- 四维度 -->
+        <div class="rating-dimensions">
+          ${dimsHtml}
+        </div>
+
+        <!-- 统计数据 -->
+        <div class="rating-stats">
+          <span>操作次数：${stats.operationCount || 0}</span>
+          <span>最高连击：${stats.highestCombo || 0}</span>
+          <span>最高合成：Lv.${stats.maxMergeLevel || 0}</span>
+          <span>完成订单：${stats.ordersCompleted || 0}</span>
+          <span>合成次数：${stats.mergesCount || 0}</span>
+        </div>
+      </div>
+    `;
+
+    overlay.style.display = 'flex';
+
+    // 根据是否有下一关设置按钮回调
+    if (data.isRogue) {
+      // 肉鸽模式：按钮只关闭弹窗，由 game:over 事件让肉鸽系统接管后续
+      this.setModalButtonCallback(() => {});
+    } else if (data.isLastLevel) {
+      this.setModalButtonCallback(() => {
+        window.location.reload();
+      });
+    } else if (data.nextLevel) {
+      const nextLv = data.nextLevel;
+      this.setModalButtonCallback(() => {
+        window.eventBus.emit('ui:start-level', nextLv);
+      });
+    }
   }
 }

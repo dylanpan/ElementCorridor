@@ -183,7 +183,7 @@ const BOON_POOL = [
     icon: '3️⃣',
     rarity: 'rare',
     category: 'merge',
-    description: '三个同类型同等级元素可合成为更高级元素',
+    description: '三个同类型同等级元素可合成为高两级元素（替代二合一）',
     flavor: '"三人成虎"',
     apply: () => {}, // ⏳ 待补充——在 _onCellClick 中检测，点击第三个同类型同等级元素时触发三合一
   },

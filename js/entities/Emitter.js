@@ -22,6 +22,10 @@ class Emitter {
     this.isReady = true;
     this.totalSpawns = 0;
 
+    // 冻结状态（紧急事件系统使用）
+    this._frozenDuration = 0;   // 累计冻结毫秒数
+    this._freezeStartTime = 0;  // 当前冻结开始时间戳
+
     // 祝福修饰器（肉鸽模式使用）
     this.modifiers = {
       cooldownMultiplier: 1.0,
@@ -71,11 +75,28 @@ class Emitter {
     return results[0];
   }
 
-  /** 获取冷却进度 (0~1) */
+  /** 获取冷却进度 (0~1)，考虑冻结暂停的时间 */
   getCooldownProgress(currentTime) {
-    const elapsed = currentTime - this.lastSpawnTime;
+    let effectiveElapsed = currentTime - this.lastSpawnTime - this._frozenDuration;
+    if (effectiveElapsed < 0) effectiveElapsed = 0;
     const actualCd = this.getActualCooldown();
-    return Math.min(elapsed / actualCd, 1);
+    return Math.min(effectiveElapsed / actualCd, 1);
+  }
+
+  /** 开始冻结：记录冻结开始时间 */
+  startFreeze(currentTime) {
+    if (this._freezeStartTime === 0) {
+      this._freezeStartTime = currentTime || Date.now();
+    }
+  }
+
+  /** 结束冻结：将本次冻结时长累加到 _frozenDuration */
+  endFreeze(currentTime) {
+    if (this._freezeStartTime > 0) {
+      const now = currentTime || Date.now();
+      this._frozenDuration += now - this._freezeStartTime;
+      this._freezeStartTime = 0;
+    }
   }
 
   /** 重置冷却 */
@@ -96,6 +117,7 @@ class Emitter {
       id: this.id,
       lastSpawnTime: this.lastSpawnTime,
       totalSpawns: this.totalSpawns,
+      _frozenDuration: this._frozenDuration,
       modifiers: { ...this.modifiers },
     };
   }
@@ -107,6 +129,7 @@ class Emitter {
     const emitter = new Emitter(config);
     emitter.lastSpawnTime = data.lastSpawnTime;
     emitter.totalSpawns = data.totalSpawns;
+    emitter._frozenDuration = data._frozenDuration || 0;
     if (data.modifiers) {
       emitter.modifiers = { ...emitter.modifiers, ...data.modifiers };
     }

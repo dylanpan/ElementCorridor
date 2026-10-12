@@ -172,6 +172,26 @@ class OrderSystem {
     return [...this.orders];
   }
 
+  /**
+   * 添加一个加急订单（临时额外订单）
+   */
+  addRushOrder(order) {
+    this.orders.push(order);
+    window.eventBus.emit('orders:updated', [...this.orders]);
+  }
+
+  /**
+   * 移除加急订单（事件结束时调用）
+   */
+  removeRushOrder(orderId) {
+    const idx = this.orders.findIndex(o => o.id === orderId);
+    if (idx !== -1) {
+      this.orders.splice(idx, 1);
+      // 移除后补充到 maxOrders
+      this.fillOrders();
+    }
+  }
+
   /** 序列化 */
   serialize() {
     return {
