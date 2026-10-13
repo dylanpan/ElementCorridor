@@ -17,7 +17,6 @@ class UIManager {
     this._isBannerShowing = false;
     // 怒气/大招系统状态
     this._rageValue = 0;
-    this._isUltimatePanelOpen = false;
     this._ultimates = []; // 从 GameEngine 同步
   }
 
@@ -308,7 +307,18 @@ class UIManager {
       // 更新冷却进度条（整个按钮背景，从左到右）
       if (btnData.cooldownBar) {
         const pct = Math.round(progress * 100);
-        btnData.cooldownBar.style.width = `${pct}%`;
+
+        // 刚进入冷却时（progress < 0.01），临时移除过渡动画，
+        // 避免 CSS transition 导致进度条从 100% 平滑收缩到 0% 的视觉延迟
+        if (progress < 0.01) {
+          btnData.cooldownBar.style.transition = 'none';
+          btnData.cooldownBar.style.width = `${pct}%`;
+          void btnData.cooldownBar.offsetWidth;
+          btnData.cooldownBar.style.transition = 'width 0.15s linear, background 0.25s ease';
+        } else {
+          btnData.cooldownBar.style.width = `${pct}%`;
+        }
+
         // 颜色随进度变化：红色→橙色→绿色
         if (progress < 0.33) {
           btnData.cooldownBar.style.background = 'linear-gradient(90deg, #ef5350, #ff7043)';
@@ -1426,160 +1436,76 @@ class UIManager {
   // ==================== 怒气/大招系统 UI ====================
 
   /**
-   * 创建怒气条（右侧竖直半透明条）
+   * 创建怒气条（右侧面板内横向进度条 + 大招卡片列表）
    * @param {Array} ultimates - 大招池定义
    */
   createRageBar(ultimates) {
     console.log('[UIManager] createRageBar called, ultimates count:', ultimates ? ultimates.length : 0);
     this._ultimates = ultimates || [];
 
-    // 移除旧怒气条
-    const oldBar = document.getElementById('rage-bar-container');
-    if (oldBar && oldBar.parentNode) oldBar.parentNode.removeChild(oldBar);
+    // 显示右侧面板中的 rage-section
+    const section = document.getElementById('rage-section');
+    if (section) section.style.display = 'block';
 
-    const container = document.createElement('div');
-    container.id = 'rage-bar-container';
-    container.className = 'rage-bar-container';
-
-    // 标题
-    const title = document.createElement('div');
-    title.className = 'rage-bar-title';
-    title.textContent = '⚡ 怒气';
-    container.appendChild(title);
-
-    // 竖直条
-    const barTrack = document.createElement('div');
-    barTrack.className = 'rage-bar-track';
-
-    const barFill = document.createElement('div');
-    barFill.id = 'rage-bar-fill';
-    barFill.className = 'rage-bar-fill';
-    barFill.style.height = '0%';
-    barTrack.appendChild(barFill);
-
-    container.appendChild(barTrack);
-
-    // 数值显示
-    const valueDisplay = document.createElement('div');
-    valueDisplay.id = 'rage-value-display';
-    valueDisplay.className = 'rage-value-display';
-    valueDisplay.textContent = '0';
-    container.appendChild(valueDisplay);
-
-    // 大招按钮（点击展开面板）
-    const ultBtn = document.createElement('button');
-    ultBtn.id = 'ultimate-btn';
-    ultBtn.className = 'ultimate-btn';
-    ultBtn.title = '释放大招';
-    ultBtn.textContent = '🔥';
-    ultBtn.addEventListener('click', () => this._toggleUltimatePanel());
-    container.appendChild(ultBtn);
-
-    document.body.appendChild(container);
+    // 渲染大招卡片列表
+    this._renderUltimateList();
   }
 
   /**
-   * 更新怒气条
-   * @param {number} value - 当前怒气值
-   * @param {number} max - 最大值
+   * 渲染大招卡片列表（嵌入右侧面板，按可释放状态排序）
    */
-  updateRageBar(value, max) {
-    this._rageValue = value;
-    const fill = document.getElementById('rage-bar-fill');
-    const display = document.getElementById('rage-value-display');
-    const btn = document.getElementById('ultimate-btn');
+  _renderUltimateList() {
+    const container = document.getElementById('ultimate-inline-list');
+    if (!container) return;
 
-    if (!fill || !display) return;
+    container.innerHTML = '';
 
-    const pct = Math.min((value / max) * 100, 100);
-    fill.style.height = `${pct}%`;
-
-    // 颜色随怒气变化：蓝→紫→红→金
-    if (pct < 30) {
-      fill.style.background = 'linear-gradient(to top, #2196f3, #42a5f5)';
-    } else if (pct < 60) {
-      fill.style.background = 'linear-gradient(to top, #9c27b0, #ab47bc)';
-    } else if (pct < 80) {
-      fill.style.background = 'linear-gradient(to top, #f44336, #ef5350)';
-    } else {
-      fill.style.background = 'linear-gradient(to top, #ff9800, #ffd700)';
-      fill.classList.add('rage-bar-pulsing');
-    }
-
-    if (pct < 80) {
-      fill.classList.remove('rage-bar-pulsing');
-    }
-
-    display.textContent = `${Math.floor(value)}`;
-
-    // 怒气满时按钮发光
-    if (btn) {
-      if (value >= 80) {
-        btn.classList.add('ultimate-btn-ready');
-      } else {
-        btn.classList.remove('ultimate-btn-ready');
-      }
-    }
-  }
-
-  /** 切换大招选择面板显示/隐藏 */
-  _toggleUltimatePanel() {
-    if (this._isUltimatePanelOpen) {
-      this._hideUltimatePanel();
-    } else {
-      this._showUltimatePanel();
-    }
-  }
-
-  /** 显示大招选择面板 */
-  _showUltimatePanel() {
-    const existing = document.getElementById('ultimate-panel');
-    if (existing) {
-      existing.style.display = 'flex';
-      this._isUltimatePanelOpen = true;
+    if (!this._ultimates || this._ultimates.length === 0) {
+      container.innerHTML = '<div class="ultimate-empty-hint">暂无可用大招</div>';
       return;
     }
 
-    const panel = document.createElement('div');
-    panel.id = 'ultimate-panel';
-    panel.className = 'ultimate-panel';
+    const now = Date.now();
 
-    // 标题栏
-    const header = document.createElement('div');
-    header.className = 'ultimate-panel-header';
-    header.innerHTML = '<span>🔥 大招选择</span><span class="ultimate-panel-close" id="ultimate-panel-close">✕</span>';
-    panel.appendChild(header);
+    // 按可释放状态排序：可释放（怒气足够+未锁定+不在冷却）排最上面
+    const sorted = [...this._ultimates].sort((a, b) => {
+      const aLocked = a.unlockBoon && !window.gameEngine?.boonSystem?.hasBoon(a.unlockBoon);
+      const bLocked = b.unlockBoon && !window.gameEngine?.boonSystem?.hasBoon(b.unlockBoon);
+      const aOnCd = !aLocked && (now - (a.lastUsedTime || 0)) < a.cooldown;
+      const bOnCd = !bLocked && (now - (b.lastUsedTime || 0)) < b.cooldown;
+      const aReady = !aLocked && !aOnCd && this._rageValue >= a.rageCost;
+      const bReady = !bLocked && !bOnCd && this._rageValue >= b.rageCost;
 
-    // 大招列表
-    const list = document.createElement('div');
-    list.className = 'ultimate-list';
+      if (aReady !== bReady) return aReady ? -1 : 1;
+      return 0;
+    });
 
-    for (const ult of this._ultimates) {
+    for (const ult of sorted) {
       const card = document.createElement('div');
       card.className = 'ultimate-card';
       card.dataset.ultId = ult.id;
 
-      // 检查是否解锁
       const isLocked = ult.unlockBoon && !window.gameEngine?.boonSystem?.hasBoon(ult.unlockBoon);
       if (isLocked) card.classList.add('ultimate-card-locked');
 
-      // 检查怒气是否足够
       const hasRage = this._rageValue >= ult.rageCost;
       if (!hasRage && !isLocked) card.classList.add('ultimate-card-no-rage');
 
-      // 计算冷却状态
-      const now = Date.now();
       const elapsed = now - (ult.lastUsedTime || 0);
       const isOnCooldown = !isLocked && elapsed < ult.cooldown;
       const cooldownPct = isOnCooldown ? Math.round((elapsed / ult.cooldown) * 100) : 100;
+
+      if (isOnCooldown) card.classList.add('ultimate-card-on-cd');
 
       card.innerHTML = `
         <div class="ultimate-cooldown-bar">
           <div class="ultimate-cooldown-fill" style="width:${cooldownPct}%"></div>
         </div>
-        <div class="ultimate-card-icon">${ult.icon}</div>
+        <div class="ultimate-card-row">
+          <span class="ultimate-card-icon">${ult.icon}</span>
+          <span class="ultimate-card-name">${ult.name}</span>
+        </div>
         <div class="ultimate-card-info">
-          <div class="ultimate-card-name">${ult.name}</div>
           <div class="ultimate-card-desc">${ult.desc}</div>
           <div class="ultimate-card-cost">
             ${isLocked ? '🔒 未解锁' : isOnCooldown ? `⏳ 冷却中 ${Math.ceil((ult.cooldown - elapsed) / 1000)}s` : `⚡ ${ult.rageCost} 怒气`}
@@ -1590,71 +1516,65 @@ class UIManager {
       if (!isLocked && !isOnCooldown) {
         card.addEventListener('click', () => {
           if (window.gameEngine && window.gameEngine.useUltimate) {
-            const success = window.gameEngine.useUltimate(ult.id);
-            if (success) this._hideUltimatePanel();
+            window.gameEngine.useUltimate(ult.id);
           }
         });
       }
 
-      list.appendChild(card);
+      container.appendChild(card);
     }
 
-    panel.appendChild(list);
-    document.body.appendChild(panel);
-
-    // 启动大招冷却定时更新
-    this._ultimateCdInterval = setInterval(() => {
-      this._updateUltimateCooldowns();
-    }, 200);
-
-    // 关闭按钮
-    const closeBtn = document.getElementById('ultimate-panel-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => this._hideUltimatePanel());
+    // 启动冷却定时更新（如果尚未启动）
+    if (!this._ultimateCdInterval) {
+      this._ultimateCdInterval = setInterval(() => {
+        this._updateUltimateCooldowns();
+      }, 200);
     }
-
-    // 点击外部关闭
-    setTimeout(() => {
-      document.addEventListener('click', this._boundClosePanel = (e) => {
-        if (!panel.contains(e.target) && e.target.id !== 'ultimate-btn') {
-          this._hideUltimatePanel();
-        }
-      });
-    }, 0);
-
-    void panel.offsetWidth;
-    panel.classList.add('show');
-    this._isUltimatePanelOpen = true;
   }
 
-  /** 隐藏大招选择面板 */
-  _hideUltimatePanel() {
-    // 清除冷却定时器
-    if (this._ultimateCdInterval) {
-      clearInterval(this._ultimateCdInterval);
-      this._ultimateCdInterval = null;
+  /**
+   * 更新怒气条（横向进度条）
+   * @param {number} value - 当前怒气值
+   * @param {number} max - 最大值
+   */
+  updateRageBar(value, max) {
+    this._rageValue = value;
+    const fill = document.getElementById('rage-bar-h-fill');
+    const display = document.getElementById('rage-value-h-display');
+
+    if (!fill || !display) return;
+
+    const pct = Math.min((value / max) * 100, 100);
+    fill.style.width = `${pct}%`;
+
+    // 颜色随怒气变化：蓝→紫→红→金
+    if (pct < 30) {
+      fill.style.background = 'linear-gradient(90deg, #2196f3, #42a5f5)';
+    } else if (pct < 60) {
+      fill.style.background = 'linear-gradient(90deg, #9c27b0, #ab47bc)';
+    } else if (pct < 80) {
+      fill.style.background = 'linear-gradient(90deg, #f44336, #ef5350)';
+    } else {
+      fill.style.background = 'linear-gradient(90deg, #ff9800, #ffd700)';
+      fill.classList.add('rage-bar-pulsing');
     }
-    const panel = document.getElementById('ultimate-panel');
-    if (panel) {
-      panel.classList.remove('show');
-      panel.classList.add('hide');
-      setTimeout(() => {
-        if (panel.parentNode) panel.parentNode.removeChild(panel);
-      }, 300);
+
+    if (pct < 80) {
+      fill.classList.remove('rage-bar-pulsing');
     }
-    if (this._boundClosePanel) {
-      document.removeEventListener('click', this._boundClosePanel);
-      this._boundClosePanel = null;
-    }
-    this._isUltimatePanelOpen = false;
+
+    display.textContent = `${Math.floor(value)}/${max}`;
+
+    // 刷新大招列表状态
+    this._renderUltimateList();
   }
 
-  /** 更新大招冷却进度条 */
+  /** 更新大招冷却进度条（内联列表版） */
   _updateUltimateCooldowns() {
-    const panel = document.getElementById('ultimate-panel');
-    if (!panel || !window.gameEngine) return;
+    const container = document.getElementById('ultimate-inline-list');
+    if (!container || !window.gameEngine) return;
     const now = Date.now();
-    const cards = panel.querySelectorAll('.ultimate-card');
+    const cards = container.querySelectorAll('.ultimate-card');
     for (const card of cards) {
       const ultId = card.dataset.ultId;
       const ult = window.gameEngine._ultimates.find(u => u.id === ultId);

@@ -48,6 +48,7 @@
     window.__gameEngine = gameEngine;
     window.gameEngine = gameEngine;
     window.__boonSystem = boonSystem;
+    window.__eventSystem = eventSystem;
 
   // 设置按钮事件
     setupButtons();
@@ -756,6 +757,49 @@
             type: 'info',
           });
         }
+      });
+    }
+
+    // ====== 帮助弹窗 ======
+    const helpBtn = document.getElementById('help-btn');
+    if (helpBtn) {
+      helpBtn.addEventListener('click', () => {
+        let overlay = document.getElementById('help-modal-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'help-modal-overlay';
+          overlay.innerHTML = `
+            <div id="help-modal-box">
+              <button class="help-modal-close" id="help-modal-close-btn">✕</button>
+              <h3>❓ 操作说明</h3>
+              <ul class="help-modal-list">
+                <li>点击 <strong>发射器</strong> 产出基础元素</li>
+                <li>点击选中棋盘上的元素</li>
+                <li>点击另一个 <strong>同类型同等级</strong> 元素进行合成</li>
+                <li>点击空位可移动选中的元素</li>
+                <li>点击 <strong>订单卡片</strong> 提交匹配的元素获得积分</li>
+                <li>达到目标积分即可通关！</li>
+              </ul>
+            </div>
+          `;
+          document.body.appendChild(overlay);
+
+          // 关闭按钮
+          const closeBtn = overlay.querySelector('#help-modal-close-btn');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+              overlay.classList.remove('show');
+            });
+          }
+
+          // 点击遮罩关闭
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.remove('show');
+            }
+          });
+        }
+        overlay.classList.add('show');
       });
     }
   }

@@ -66,6 +66,7 @@
       <button class="debug-tab active" data-tab="boons">✨ 祝福 (${BOON_POOL.length})</button>
       <button class="debug-tab" data-tab="curses">💀 诅咒 (${CURSE_POOL.length})</button>
       <button class="debug-tab" data-tab="events">⚡ 紧急事件 (${EMERGENCY_EVENTS.length})</button>
+      <button class="debug-tab" data-tab="randomevents">🎲 随机事件 (${Object.values(EVENT_POOL).flat().length})</button>
       <button class="debug-tab" data-tab="ultimates">🔥 大招</button>
     `;
 
@@ -184,6 +185,25 @@
         data: e,
         type: 'event',
       }));
+    } else if (tab === 'randomevents') {
+      // 按阶段遍历 EVENT_POOL
+      const stageLabels = { early: '早期', mid: '中期', late: '后期' };
+      Object.keys(EVENT_POOL).forEach((stage) => {
+        EVENT_POOL[stage].forEach((e) => {
+          items.push({
+            id: e.id,
+            icon: '❓',
+            name: e.title,
+            desc: e.description,
+            rarity: null,
+            category: stage,
+            stageLabel: stageLabels[stage] || stage,
+            options: e.options,
+            data: e,
+            type: 'randomevent',
+          });
+        });
+      });
     } else if (tab === 'ultimates') {
       // 从游戏引擎获取全部大招池
       const ge = window.__gameEngine;
@@ -390,6 +410,87 @@
       window.eventBus.emit('notification', {
         message: `⚡ 已触发事件「${item.icon} ${item.name}」`,
         type: 'info',
+      });
+    } else if (item.type === 'randomevent') {
+      // 在调试工具内部显示事件选择，避免触发外部弹窗覆盖调试面板
+      const es = window.__eventSystem;
+      if (!es) {
+        alert('事件系统未初始化（经典模式不支持随机事件）');
+        return;
+      }
+      // 获取调试面板内容区，在其上方插入事件选择区域
+      const content = _overlay.querySelector('.debug-content');
+      if (!content) return;
+
+      // 移除已有的事件选择区域
+      const existing = content.querySelector('.debug-event-chooser');
+      if (existing) existing.remove();
+
+      const chooser = document.createElement('div');
+      chooser.className = 'debug-event-chooser';
+      chooser.style.cssText = `
+        background: linear-gradient(135deg, #2d1b00, #1a0f00);
+        border: 1px solid #ff980044; border-radius: 10px;
+        padding: 14px 16px; margin-bottom: 10px;
+        position: relative;
+      `;
+
+      let optionsHtml = '';
+      item.options.forEach((opt, i) => {
+        optionsHtml += `
+          <button class="debug-event-opt-btn" data-idx="${i}" style="
+            display:block; width:100%; margin:6px 0; padding:8px 12px;
+            background:rgba(255,152,0,0.08); border:1px solid #ff980066;
+            border-radius:8px; color:#fff; cursor:pointer; font-size:13px;
+            text-align:left; transition:all 0.2s;
+          " onmouseenter="this.style.background='rgba(255,152,0,0.2)'" onmouseleave="this.style.background='rgba(255,152,0,0.08)'">
+            <span style="color:#ff9800;font-weight:bold;">选项${i+1}:</span> ${opt.text}
+            <br><span style="color:#aaa;font-size:11px;">→ ${opt.result}</span>
+          </button>
+        `;
+      });
+
+      chooser.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div><span style="font-size:22px;">❓</span> <strong style="color:#ff9800;font-size:15px;">${item.name}</strong></div>
+          <button class="debug-event-close-btn" style="
+            background:none; border:none; color:#888; cursor:pointer; font-size:18px; line-height:1;
+          " title="关闭">✕</button>
+        </div>
+        <p style="color:#ccc;margin:0 0 10px;font-size:13px;line-height:1.4;">${item.desc}</p>
+        <div>${optionsHtml}</div>
+      `;
+
+      // 插入到搜索框和列表之间
+      const searchBox = content.querySelector('.debug-search');
+      if (searchBox) {
+        content.insertBefore(chooser, searchBox.nextSibling);
+      } else {
+        content.insertBefore(chooser, content.firstChild);
+      }
+
+      // 绑定选项点击
+      chooser.querySelectorAll('.debug-event-opt-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx);
+          const context = {
+            rogueSystem: ge.rogueSystem,
+            boonSystem: bs,
+            gameEngine: ge,
+          };
+          const result = es.executeOption(item.data, idx, context);
+          chooser.remove();
+          hideDebugPanel();
+          window.eventBus.emit('notification', {
+            message: `🎲 事件「${item.name}」结果：${result.message}`,
+            type: 'info',
+          });
+        });
+      });
+
+      // 绑定关闭按钮
+      chooser.querySelector('.debug-event-close-btn').addEventListener('click', () => {
+        chooser.remove();
       });
     }
   }
