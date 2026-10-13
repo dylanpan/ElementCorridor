@@ -165,6 +165,8 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   min-height: calc(100vh - 60px);
+  position: relative;
+  z-index: 101;
 }
 
 /* ==================== 面板通用 ==================== */
@@ -850,6 +852,8 @@ body {
   transform: translateX(-50%);
   min-width: 200px;
   max-width: 260px;
+  max-height: 180px;
+  overflow-y: auto;
   background: rgba(15, 15, 25, 0.96);
   border-radius: 8px;
   padding: 8px 12px;

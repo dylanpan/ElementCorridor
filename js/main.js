@@ -506,17 +506,16 @@
           // 重置方向（恢复 CSS 默认的向下弹出）
           tip.style.top = '';
           tip.style.bottom = '';
-          // 不设置 display:block——由 CSS :hover 控制显示
 
-          // 下一帧检测位置，避免闪烁
-          requestAnimationFrame(() => {
-            const rect = tip.getBoundingClientRect();
-            if (rect.bottom > window.innerHeight) {
-              // 超出视口底部 → 改为向上弹出
-              tip.style.top = 'auto';
-              tip.style.bottom = 'calc(100% + 6px)';
-            }
-          });
+          // 强制重排确保 tooltip 已渲染完成
+          void tip.offsetHeight;
+
+          const rect = tip.getBoundingClientRect();
+          if (rect.bottom > window.innerHeight) {
+            // 超出视口底部 → 改为向上弹出
+            tip.style.top = 'auto';
+            tip.style.bottom = 'calc(100% + 6px)';
+          }
         });
 
         el.addEventListener('mouseleave', function() {
