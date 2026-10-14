@@ -42,9 +42,11 @@ class Emitter {
     return this.cooldownMs * this.modifiers.cooldownMultiplier;
   }
 
-  /** 检查发射器是否就绪 */
+  /** 检查发射器是否就绪（考虑冻结暂停时间） */
   isReadyToSpawn(currentTime) {
-    return currentTime - this.lastSpawnTime >= this.getActualCooldown();
+    let effectiveElapsed = currentTime - this.lastSpawnTime - this._frozenDuration;
+    if (effectiveElapsed < 0) effectiveElapsed = 0;
+    return effectiveElapsed >= this.getActualCooldown();
   }
 
   /** 执行产出，返回 Element 实例或数组（双重产出） */

@@ -213,7 +213,28 @@ body {
 .rogue-level-top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
+  position: relative;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  margin-bottom: -4px;
+}
+
+/* 版本号徽章 */
+.version-badge {
+  font-size: 10px;
+  color: #aaa;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 16px;
+  white-space: nowrap;
+}
 }
 
 .rogue-map-btn {
@@ -2516,6 +2537,18 @@ body {
   gap: 4px;
   padding: 8px 18px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+.debug-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+.debug-tabs::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
 }
 .debug-tab {
   padding: 7px 14px;
@@ -3008,12 +3041,13 @@ body {
   background: linear-gradient(135deg, rgba(40, 10, 10, 0.9), rgba(60, 15, 15, 0.85));
   border: 2px solid rgba(255, 60, 60, 0.5);
   border-radius: 12px;
-  padding: 6px 18px 6px 14px;
+  padding: 8px 18px 8px 14px;
   z-index: 995;
   opacity: 0;
   transition: all 0.4s ease;
   pointer-events: none;
   box-shadow: 0 0 30px rgba(200, 30, 30, 0.25);
+  max-width: min(90vw, 500px);
 }
 .boss-hud-enter {
   opacity: 1;
@@ -3022,20 +3056,26 @@ body {
 .boss-hud-icon {
   font-size: 28px;
   line-height: 1;
+  flex-shrink: 0;
+}
+.boss-hud-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .boss-hud-name {
   font-size: 16px;
   font-weight: bold;
   color: #ff6b6b;
   text-shadow: 0 0 12px rgba(255, 80, 80, 0.5);
+  white-space: nowrap;
 }
 .boss-hud-desc {
   font-size: 11px;
   color: #cc9999;
-  max-width: 260px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 /* Boss 愤怒状态 */
@@ -3069,6 +3109,49 @@ body {
 }
 .boss-rage-pulse.show {
   opacity: 1;
+}
+
+/* ==================== Boss 技能信息面板（左侧） ==================== */
+.boss-info-section {
+  border-color: rgba(255, 60, 60, 0.3);
+}
+.boss-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.boss-skill-card {
+  background: rgba(40, 10, 10, 0.6);
+  border: 1px solid rgba(200, 50, 50, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.boss-skill-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.boss-skill-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.boss-skill-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff8a8a;
+}
+.boss-skill-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.boss-skill-item {
+  font-size: 11px;
+  color: #ccaaaa;
+  line-height: 1.4;
+  padding-left: 12px;
+  position: relative;
 }
 
 /* 灼烧格子 */

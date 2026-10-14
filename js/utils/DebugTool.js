@@ -67,6 +67,7 @@
       <button class="debug-tab" data-tab="curses">💀 诅咒 (${CURSE_POOL.length})</button>
       <button class="debug-tab" data-tab="events">⚡ 紧急事件 (${EMERGENCY_EVENTS.length})</button>
       <button class="debug-tab" data-tab="randomevents">🎲 随机事件 (${Object.values(EVENT_POOL).flat().length})</button>
+      <button class="debug-tab" data-tab="bosses">👑 Boss (${BOSS_CONFIGS.length})</button>
       <button class="debug-tab" data-tab="ultimates">🔥 大招</button>
     `;
 
@@ -222,6 +223,19 @@
         isBase: !u.unlockBoon,
         type: 'ultimate',
       }));
+    } else if (tab === 'bosses') {
+      items = BOSS_CONFIGS.map((b) => ({
+        id: b.id,
+        icon: b.icon,
+        name: b.name,
+        desc: b.description,
+        floor: b.floor,
+        specialRule: b.specialRule,
+        targetScoreMultiplier: b.targetScoreMultiplier,
+        mechanics: b.mechanics,
+        data: b,
+        type: 'boss',
+      }));
     }
 
     items.forEach((item) => {
@@ -241,6 +255,7 @@
       if (item.type === 'curse') catLabel = '诅咒';
       else if (item.type === 'event') catLabel = item.category === 'positive' ? '增益' : item.category === 'negative' ? '负面' : item.category === 'challenge' ? '挑战' : '随机';
       else if (item.type === 'ultimate') catLabel = '大招';
+      else if (item.type === 'boss') catLabel = 'Boss';
 
       // 额外信息
       let extraInfo = '';
@@ -266,6 +281,54 @@
             <span class="debug-extra">${statusIcon} 需要祝福解锁</span>
           `;
         }
+      }
+      if (item.type === 'boss') {
+        // 构建机制参数列表
+        let mechHtml = '';
+        const mech = item.mechanics;
+        if (mech) {
+          const labels = {
+            scorchInterval: '灼烧间隔',
+            scorchDuration: '灼烧持续',
+            spreadChance: '蔓延概率',
+            rageThreshold: '愤怒阈值',
+            rageCooldownPenalty: '冷却惩罚',
+            freezeInterval: '冻结间隔',
+            freezeDuration: '冻结持续',
+            thawMergeCount: '解冻合成数',
+            blizzardThreshold: '暴风雪阈值',
+            blizzardPauseDuration: '暴风雪暂停',
+            waveInterval: '波动间隔',
+            chaosSpawnInterval: '混沌生成间隔',
+            chaosIcon: '混沌图标',
+            waveLevelRange: '波动范围',
+            timeLimit: '时间限制',
+            devourInterval: '吞噬间隔',
+            orderDelay: '订单延缓',
+            unsealInterval: '解封间隔',
+            mirrorInterval: '镜像间隔',
+            mirrorDuration: '镜像持续',
+            scorePerBoonPercent: '祝福加成%',
+          };
+          Object.keys(mech).forEach((k) => {
+            const label = labels[k] || k;
+            let val = mech[k];
+            if (typeof val === 'number') {
+              if (k.includes('Interval') || k.includes('Duration') || k.includes('PauseDuration') || k === 'timeLimit' || k === 'devourInterval' || k === 'orderDelay' || k === 'unsealInterval' || k === 'mirrorInterval' || k === 'mirrorDuration') {
+                val = (val / 1000).toFixed(0) + 's';
+              } else if (k === 'spreadChance' || k === 'scorePerBoonPercent' || k === 'rageCooldownPenalty') {
+                val = (val * 100).toFixed(0) + '%';
+              }
+            }
+            mechHtml += `<span class="debug-extra">${label}: ${val}</span> `;
+          });
+        }
+        extraInfo = `
+          <span class="debug-extra">🏛 第 ${item.floor} 层</span>
+          <span class="debug-extra">📈 ×${item.targetScoreMultiplier}</span>
+          <span class="debug-extra">⚙ ${item.specialRule}</span>
+          <div style="margin-top:3px;">${mechHtml}</div>
+        `;
       }
 
       el.innerHTML = `
@@ -491,6 +554,15 @@
       // 绑定关闭按钮
       chooser.querySelector('.debug-event-close-btn').addEventListener('click', () => {
         chooser.remove();
+      });
+    } else if (item.type === 'boss') {
+      // 将当前战斗切换为 Boss 战
+      const floor = ge.state.level || (ge.rogueSystem ? ge.rogueSystem.getCurrentFloor() : 1);
+      ge._initBossBattle(item.id, floor);
+      hideDebugPanel();
+      window.eventBus.emit('notification', {
+        message: `👑 已切换至 Boss 战「${item.icon} ${item.name}」`,
+        type: 'warning',
       });
     }
   }

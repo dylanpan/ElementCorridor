@@ -1676,7 +1676,7 @@ class UIManager {
 
   // ==================== Boss 战视觉特效 ====================
 
-  /** Boss 出现：创建 Boss HUD */
+  /** Boss 出现：创建 Boss HUD + 左侧技能面板 */
   _onBossInit(data) {
     // 移除旧 Boss HUD
     const oldHud = document.getElementById('boss-hud');
@@ -1688,8 +1688,10 @@ class UIManager {
 
     hud.innerHTML = `
       <div class="boss-hud-icon">${data.icon}</div>
-      <div class="boss-hud-name">${data.name}</div>
-      <div class="boss-hud-desc">${data.description}</div>
+      <div class="boss-hud-info">
+        <div class="boss-hud-name">${data.name}</div>
+        <div class="boss-hud-desc">${data.description}</div>
+      </div>
     `;
 
     document.body.appendChild(hud);
@@ -1697,6 +1699,93 @@ class UIManager {
     // 入场动画
     void hud.offsetWidth;
     hud.classList.add('boss-hud-enter');
+
+    // 更新左侧 Boss 技能面板
+    this.updateBossSkillsPanel(data);
+  }
+
+  /** 更新左侧 Boss 技能信息面板 */
+  updateBossSkillsPanel(data) {
+    const section = document.getElementById('boss-info-section');
+    const panel = document.getElementById('boss-skills-panel');
+    if (!section || !panel) return;
+
+    section.style.display = 'block';
+
+    let skillsHtml = '';
+
+    switch (data.id) {
+      case 'boss_lava_giant': {
+        const m = data.mechanics;
+        skillsHtml = `
+          <div class="boss-skill-card">
+            <div class="boss-skill-header"><span class="boss-skill-icon">🗿</span><span class="boss-skill-title">熔岩巨像 · 灼烧</span></div>
+            <div class="boss-skill-body">
+              <div class="boss-skill-item">🔥 灼烧：每 ${(m.scorchInterval / 1000).toFixed(0)} 秒灼烧一个随机格子，持续 ${(m.scorchDuration / 1000).toFixed(0)} 秒</div>
+              <div class="boss-skill-item">🔥 蔓延：灼烧有 ${Math.round(m.spreadChance * 100)}% 概率蔓延到相邻格子</div>
+              <div class="boss-skill-item">⚡ 愤怒：≥${m.rageThreshold} 格同时灼烧时进入愤怒，发射器冷却 ×${m.rageCooldownPenalty}</div>
+              <div class="boss-skill-item">💧 灭火：合成可熄灭灼烧格子</div>
+            </div>
+          </div>`;
+        break;
+      }
+      case 'boss_ice_witch': {
+        const m = data.mechanics;
+        skillsHtml = `
+          <div class="boss-skill-card">
+            <div class="boss-skill-header"><span class="boss-skill-icon">❄</span><span class="boss-skill-title">冰霜女巫 · 冻结</span></div>
+            <div class="boss-skill-body">
+              <div class="boss-skill-item">❄ 冻结：每 ${(m.freezeInterval / 1000).toFixed(0)} 秒冻结一行，持续 ${(m.freezeDuration / 1000).toFixed(0)} 秒</div>
+              <div class="boss-skill-item">💧 解冻：在被冻结行上连续合成 ${m.thawMergeCount} 次可解冻该行</div>
+              <div class="boss-skill-item">🌪 暴风雪：≥${m.blizzardThreshold} 行被冻结时触发暴风雪，所有发射器暂停 ${(m.blizzardPauseDuration / 1000).toFixed(0)} 秒</div>
+            </div>
+          </div>`;
+        break;
+      }
+      case 'boss_chaos_core': {
+        const m = data.mechanics;
+        skillsHtml = `
+          <div class="boss-skill-card">
+            <div class="boss-skill-header"><span class="boss-skill-icon">🌀</span><span class="boss-skill-title">混沌之核 · 混沌</span></div>
+            <div class="boss-skill-body">
+              <div class="boss-skill-item">🌊 混沌波动：每 ${(m.waveInterval / 1000).toFixed(0)} 秒随机变化棋盘元素等级 ±${m.waveLevelRange}</div>
+              <div class="boss-skill-item">❓ 混沌生成：每 ${(m.chaosSpawnInterval / 1000).toFixed(0)} 秒生成混沌元素</div>
+              <div class="boss-skill-item">📋 刷新：订单需求每 20 秒全部刷新</div>
+            </div>
+          </div>`;
+        break;
+      }
+      case 'boss_time_devourer': {
+        const m = data.mechanics;
+        skillsHtml = `
+          <div class="boss-skill-card">
+            <div class="boss-skill-header"><span class="boss-skill-icon">⏳</span><span class="boss-skill-title">时间吞噬者 · 限时</span></div>
+            <div class="boss-skill-body">
+              <div class="boss-skill-item">⏱ 限时：${(m.timeLimit / 1000).toFixed(0)} 秒内必须完成目标分数</div>
+              <div class="boss-skill-item">🕳 吞噬：每 ${(m.devourInterval / 1000).toFixed(0)} 秒吞噬一列（清除该列所有元素）</div>
+              <div class="boss-skill-item">⏳ 延缓：提交订单可延缓吞噬 ${(m.orderDelay / 1000).toFixed(0)} 秒</div>
+            </div>
+          </div>`;
+        break;
+      }
+      case 'boss_creation_spirit': {
+        const m = data.mechanics;
+        skillsHtml = `
+          <div class="boss-skill-card">
+            <div class="boss-skill-header"><span class="boss-skill-icon">🌟</span><span class="boss-skill-title">创世之灵 · 封印</span></div>
+            <div class="boss-skill-body">
+              <div class="boss-skill-item">🛡 封印：所有祝福失效，但棋盘扩大至最大，发射器无冷却</div>
+              <div class="boss-skill-item">🔓 解封：每 ${(m.unsealInterval / 1000).toFixed(0)} 秒解封一个祝福</div>
+              <div class="boss-skill-item">👻 镜像：每 ${(m.mirrorInterval / 1000).toFixed(0)} 秒召唤镜像，持续 ${(m.mirrorDuration / 1000).toFixed(0)} 秒</div>
+            </div>
+          </div>`;
+        break;
+      }
+      default:
+        skillsHtml = `<div class="boss-skill-item">${data.description}</div>`;
+    }
+
+    panel.innerHTML = skillsHtml;
   }
 
   /** 熔岩巨像：灼烧格子 */
@@ -1922,16 +2011,14 @@ class UIManager {
   _onBossVictory(data) {
     // 移除 Boss HUD
     const hud = document.getElementById('boss-hud');
-    if (hud) {
-      hud.classList.add('boss-hud-victory');
-      setTimeout(() => {
-        if (hud.parentNode) hud.parentNode.removeChild(hud);
-      }, 2000);
-    }
+    if (hud && hud.parentNode) hud.parentNode.removeChild(hud);
 
     // 移除倒计时
     const timer = document.getElementById('devour-timer');
     if (timer && timer.parentNode) timer.parentNode.removeChild(timer);
+
+    // 隐藏左侧 Boss 技能面板
+    this._hideBossInfo();
 
     // 全屏金光绽放
     const victoryEffect = document.createElement('div');
@@ -1949,6 +2036,17 @@ class UIManager {
 
   /** Boss 失败 */
   _onBossDefeated(data) {
+    // 移除 Boss HUD
+    const hud = document.getElementById('boss-hud');
+    if (hud && hud.parentNode) hud.parentNode.removeChild(hud);
+
+    // 移除倒计时
+    const timer = document.getElementById('devour-timer');
+    if (timer && timer.parentNode) timer.parentNode.removeChild(timer);
+
+    // 隐藏左侧 Boss 技能面板
+    this._hideBossInfo();
+
     const flash = document.createElement('div');
     flash.className = 'boss-defeated-flash';
     document.body.appendChild(flash);
@@ -1958,6 +2056,14 @@ class UIManager {
       flash.classList.remove('show');
       setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 500);
     }, 1500);
+  }
+
+  /** 隐藏所有 Boss 相关 UI */
+  _hideBossInfo() {
+    const section = document.getElementById('boss-info-section');
+    if (section) section.style.display = 'none';
+    const panel = document.getElementById('boss-skills-panel');
+    if (panel) panel.innerHTML = '';
   }
 
   /** 生成粒子特效（通用辅助） */

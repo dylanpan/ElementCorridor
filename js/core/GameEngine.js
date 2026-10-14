@@ -298,8 +298,14 @@ class GameEngine {
 
     // Boss 节点：扩大棋盘
     if (node.type === 'boss') {
-      boardCols += 2;
-      boardRows += 1;
+      if (node.bossId === 'boss_creation_spirit') {
+        // 创世之灵：棋盘扩大至最大（10x8）
+        boardCols = Math.max(boardCols, 10);
+        boardRows = Math.max(boardRows, 8);
+      } else {
+        boardCols += 2;
+        boardRows += 1;
+      }
     }
 
     // 应用祝福/诅咒对棋盘大小的调整
@@ -1295,6 +1301,7 @@ class GameEngine {
 
       // 冰霜女巫
       frozenRows: new Set(),
+      _freezeRowTimeouts: {},
       lastFreezeTime: 0,
       thawMergeCount: 0,
       isBlizzardActive: false,
@@ -1319,11 +1326,19 @@ class GameEngine {
       unsealOrder: [],
     };
 
-    // 创世之灵：封印所有祝福
+    // === 创世之灵：封印所有祝福 + 发射器无冷却 + 棋盘扩大 ===
     if (bossId === 'boss_creation_spirit' && this.boonSystem) {
       const allBoons = this.boonSystem.getCurrentBoons ? this.boonSystem.getCurrentBoons() : [];
       this._bossState.sealedBoons = allBoons.map(b => b.id);
       this._bossState.unsealOrder = [...this._bossState.sealedBoons];
+      // 通知 BoonSystem 哪些祝福被封印
+      this.boonSystem.sealedBoons = this._bossState.sealedBoons;
+      // 发射器无冷却
+      if (this.state.emitters) {
+        for (const emitter of this.state.emitters) {
+          emitter.modifiers.cooldownMultiplier = 0;
+        }
+      }
     }
 
     // 通知 UI
@@ -1392,8 +1407,17 @@ class GameEngine {
         type: 'warning',
       });
       window.eventBus.emit('boss:rage-activated', { bossId: 'boss_lava_giant' });
+      // 应用冷却惩罚
+      const penalty = mech.rageCooldownPenalty || 1.3;
+      for (const emitter of this.state.emitters) {
+        emitter.modifiers.cooldownMultiplier = penalty;
+      }
     } else if (!state.isRageActive && wasRageActive) {
       window.eventBus.emit('boss:rage-deactivated', { bossId: 'boss_lava_giant' });
+      // 恢复冷却倍率
+      for (const emitter of this.state.emitters) {
+        emitter.modifiers.cooldownMultiplier = 1.0;
+      }
     }
 
     // 4. 灼烧蔓延：每5秒有概率将灼烧扩散到相邻格子
@@ -1512,6 +1536,17 @@ class GameEngine {
     // 1. 暴风雪结束恢复
     if (state.isBlizzardActive && now > state.blizzardEndTime) {
       state.isBlizzardActive = false;
+      this._unfreezeEmitters();
+      // 清除所有冻结行，防止立即再次触发暴风雪
+      for (const row of [...state.frozenRows]) {
+        window.eventBus.emit('boss:thaw-row', { row });
+      }
+      state.frozenRows.clear();
+      // 清理所有自动解冻定时器
+      for (const key in state._freezeRowTimeouts) {
+        clearTimeout(state._freezeRowTimeouts[key]);
+      }
+      state._freezeRowTimeouts = {};
       window.eventBus.emit('boss:blizzard-ended', {});
       window.eventBus.emit('notification', {
         message: '❄ 暴风雪结束了！',
@@ -1529,6 +1564,7 @@ class GameEngine {
     if (state.frozenRows.size >= (mech.blizzardThreshold || 2) && !state.isBlizzardActive) {
       state.isBlizzardActive = true;
       state.blizzardEndTime = now + (mech.blizzardPauseDuration || 5000);
+      this._freezeEmitters();
       window.eventBus.emit('boss:blizzard-started', { duration: mech.blizzardPauseDuration || 5000 });
       window.eventBus.emit('notification', {
         message: '❄ 冰霜女巫释放了暴风雪！所有发射器暂停 5 秒',
@@ -1564,6 +1600,15 @@ class GameEngine {
     }
 
     window.eventBus.emit('boss:freeze-row', { row, duration });
+
+    // duration ms 后自动解冻
+    this._freezeRowTimeouts[row] = setTimeout(() => {
+      if (state.frozenRows.has(row)) {
+        state.frozenRows.delete(row);
+        window.eventBus.emit('boss:thaw-row', { row });
+      }
+      delete this._freezeRowTimeouts[row];
+    }, duration);
   }
 
   /** 解冻进度更新（由 _executeMerge 调用） */
@@ -2024,11 +2069,45 @@ class GameEngine {
     window.eventBus.emit('emitter:clicked', { emitterId: emitterId });
   }
 
+  /** 检查某行是否被冰霜女巫冻结 */
+  _isRowFrozen(row) {
+    return this._bossState.isActive &&
+      this._bossState.bossId === 'boss_ice_witch' &&
+      this._bossState.frozenRows.has(row);
+  }
+
   /** 点击棋盘格子 */
   _onCellClick(row, col) {
     if (!this.state.isPlaying || this.state.isPaused) return;
 
+    // === 熔岩巨像：灼烧格子检查 ===
+    if (this._isCellScorched(row, col)) {
+      return;
+    }
+
+    // === 冰霜女巫冻结行检查 ===
+    if (this._isRowFrozen(row)) {
+      return;
+    }
+    let selected = this.boardRenderer.selectedCell;
+    if (selected) {
+      if (this._isCellScorched(selected.row, selected.col) ||
+          this._isRowFrozen(selected.row)) {
+        this.boardRenderer.deselectCell();
+        return;
+      }
+    }
+
     const clickedElement = this.state.board[row][col];
+
+    // === 创世之灵：镜像元素不可操作 ===
+    if (clickedElement && this._isMirrorElement(clickedElement)) {
+      return;
+    }
+    if (selected && selected.element && this._isMirrorElement(selected.element)) {
+      this.boardRenderer.deselectCell();
+      return;
+    }
 
     // === 三合一模式检测 ===
     if (this._tripleMergeCandidates.length > 0) {
@@ -2050,7 +2129,7 @@ class GameEngine {
       return;
     }
 
-    const selected = this.boardRenderer.selectedCell;
+    selected = this.boardRenderer.selectedCell;
 
     if (!selected) {
       // 没有选中任何元素：选中点击的元素
@@ -3249,6 +3328,11 @@ class GameEngine {
       if (this._ultimates) {
         for (const u of this._ultimates) u.lastUsedTime = 0;
       }
+
+    // === Boss 战胜利处理 ===
+    if (this._bossState.isActive) {
+      this._onBossVictory();
+    }
 
     // 计算本关评级
     const rating = this._calculateRating();

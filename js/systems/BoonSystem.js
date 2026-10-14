@@ -136,9 +136,10 @@ class BoonSystem {
   }
 
   /**
-   * 检查是否拥有某祝福
+   * 检查是否拥有某祝福（考虑创世之灵封印）
    */
   hasBoon(boonId) {
+    if (this.sealedBoons && this.sealedBoons.includes(boonId)) return false;
     return this.boons.some(b => b.id === boonId);
   }
 
