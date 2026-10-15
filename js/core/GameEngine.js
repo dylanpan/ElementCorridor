@@ -1601,13 +1601,22 @@ class GameEngine {
 
     window.eventBus.emit('boss:freeze-row', { row, duration });
 
+    // 越界保护：确保 board[row] 存在
+    if (!board[row]) {
+      console.warn('[ICE_WITCH] board[' + row + '] is undefined, aborting freeze');
+      state.frozenRows.delete(row);
+      return;
+    }
+
     // duration ms 后自动解冻
-    this._freezeRowTimeouts[row] = setTimeout(() => {
-      if (state.frozenRows.has(row)) {
-        state.frozenRows.delete(row);
+    const self = this;
+    self._bossState._freezeRowTimeouts[row] = setTimeout(function() {
+      const s = self._bossState;
+      if (s.frozenRows.has(row)) {
+        s.frozenRows.delete(row);
         window.eventBus.emit('boss:thaw-row', { row });
       }
-      delete this._freezeRowTimeouts[row];
+      delete s._freezeRowTimeouts[row];
     }, duration);
   }
 
@@ -2085,10 +2094,9 @@ class GameEngine {
       return;
     }
 
-    // === 冰霜女巫冻结行检查 ===
-    if (this._isRowFrozen(row)) {
-      return;
-    }
+    // === 冰霜女巫冻结行交互 ===
+    // 冻结行元素只能作为被合成的目标（被动方）
+    // 下方已有「选中冻结行元素→取消选中」的逻辑，确保不能主动合成
     let selected = this.boardRenderer.selectedCell;
     if (selected) {
       if (this._isCellScorched(selected.row, selected.col) ||

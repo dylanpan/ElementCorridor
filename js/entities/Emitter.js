@@ -44,6 +44,10 @@ class Emitter {
 
   /** 检查发射器是否就绪（考虑冻结暂停时间） */
   isReadyToSpawn(currentTime) {
+    // 【暴风雪】活跃冻结中不可产出
+    if (this._freezeStartTime > 0) {
+      return false;
+    }
     let effectiveElapsed = currentTime - this.lastSpawnTime - this._frozenDuration;
     if (effectiveElapsed < 0) effectiveElapsed = 0;
     return effectiveElapsed >= this.getActualCooldown();
@@ -55,6 +59,7 @@ class Emitter {
       return null;
     }
     this.lastSpawnTime = currentTime;
+    this._frozenDuration = 0;  // 重置冻结累计，避免累积到下一周期
     this.totalSpawns++;
 
     const results = [];
@@ -79,6 +84,13 @@ class Emitter {
 
   /** 获取冷却进度 (0~1)，考虑冻结暂停的时间 */
   getCooldownProgress(currentTime) {
+    // 【暴风雪】活跃冻结中，进度停留在冻结开始时的状态
+    if (this._freezeStartTime > 0) {
+      const freezeStartElapsed = this._freezeStartTime - this.lastSpawnTime - this._frozenDuration;
+      if (freezeStartElapsed < 0) return 0;
+      const actualCd = this.getActualCooldown();
+      return Math.min(freezeStartElapsed / actualCd, 1);
+    }
     let effectiveElapsed = currentTime - this.lastSpawnTime - this._frozenDuration;
     if (effectiveElapsed < 0) effectiveElapsed = 0;
     const actualCd = this.getActualCooldown();

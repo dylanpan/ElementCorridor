@@ -517,15 +517,15 @@ const BOSS_CONFIGS = [
     specialRule: 'chill',
     mechanics: {
       /** 冻结间隔(ms) */
-      freezeInterval: 20000,
+      freezeInterval: 8500,
       /** 冻结持续时间(ms) */
-      freezeDuration: 8000,
+      freezeDuration: 35000,
       /** 解冻所需连续合成次数 */
       thawMergeCount: 2,
       /** 暴风雪阈值(同时冻结行数) */
       blizzardThreshold: 2,
       /** 暴风雪持续期间发射器暂停时间(ms) */
-      blizzardPauseDuration: 5000,
+      blizzardPauseDuration: 7000,
     },
   },
   {

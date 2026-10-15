@@ -640,6 +640,7 @@ class UIManager {
         break;
       }
     }
+    let targetX, targetY;
     if (!targetCard) {
       // 找不到卡片时使用订单面板整体位置作为 fallback
       const panel = this.elements['orders-panel'];
@@ -649,8 +650,8 @@ class UIManager {
       targetY = panelRect.top + panelRect.height / 2;
     } else {
       const targetRect = targetCard.getBoundingClientRect();
-      targetX = targetRect.left + targetRect.width / 2;
-      targetY = targetRect.top + targetRect.height / 2;
+      let targetX = targetRect.left + targetRect.width / 2;
+      let targetY = targetRect.top + targetRect.height / 2;
     }
 
     // 逐个飞入（每个间隔0.15秒）
