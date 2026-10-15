@@ -17,6 +17,8 @@ class BoardRenderer {
     this._tripleSelectedCells = []; // [{ row, col }] — 三合一候选格子
     this._resonatingCells = []; // [{ row, col }] — 元素共鸣高亮格子
     this.onCellClick = null;   // 回调: (row, col) => void
+    // 冰霜女巫：被冻结的行索引集合（用于 updateCell 保留冻结样式）
+    this.frozenRows = new Set();
     this._animatingCells = new Set();
 
     // === 粒子系统 ===
@@ -353,6 +355,11 @@ class BoardRenderer {
       cell.className = 'board-cell empty';
       cell.style.boxShadow = '';
       cell.style.borderColor = '';
+    }
+
+    // 冰霜女巫：如果该行被冻结，保留冻结样式
+    if (this.frozenRows.has(row)) {
+      cell.classList.add('cell-frozen');
     }
   }
 

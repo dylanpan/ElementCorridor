@@ -1873,6 +1873,9 @@ class UIManager {
 
   /** 冰霜女巫：暴风雪开始 */
   _onBossBlizzardStarted(data) {
+    // 给发射器添加冰冻特效
+    this.applyFreezeEffect(true);
+
     const overlay = document.createElement('div');
     overlay.className = 'blizzard-overlay';
     overlay.id = 'blizzard-overlay';
@@ -1892,6 +1895,9 @@ class UIManager {
 
   /** 冰霜女巫：暴风雪结束 */
   _onBossBlizzardEnded() {
+    // 移除发射器冰冻特效
+    this.applyFreezeEffect(false);
+
     const overlay = document.getElementById('blizzard-overlay');
     if (overlay) {
       overlay.classList.remove('show');

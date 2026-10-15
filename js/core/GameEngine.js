@@ -1539,6 +1539,9 @@ class GameEngine {
       this._unfreezeEmitters();
       // 清除所有冻结行，防止立即再次触发暴风雪
       for (const row of [...state.frozenRows]) {
+        if (this.boardRenderer) {
+          this.boardRenderer.frozenRows.delete(row);
+        }
         window.eventBus.emit('boss:thaw-row', { row });
       }
       state.frozenRows.clear();
@@ -1591,6 +1594,10 @@ class GameEngine {
 
     const row = available[Math.floor(Math.random() * available.length)];
     state.frozenRows.add(row);
+    // 通知 BoardRenderer 该行被冻结（使后续 updateCell 保留冻结样式）
+    if (this.boardRenderer) {
+      this.boardRenderer.frozenRows.add(row);
+    }
 
     // 冻结该行的所有元素（视觉标记）
     for (let c = 0; c < board[row].length; c++) {
@@ -1614,6 +1621,9 @@ class GameEngine {
       const s = self._bossState;
       if (s.frozenRows.has(row)) {
         s.frozenRows.delete(row);
+        if (self.boardRenderer) {
+          self.boardRenderer.frozenRows.delete(row);
+        }
         window.eventBus.emit('boss:thaw-row', { row });
       }
       delete s._freezeRowTimeouts[row];
@@ -1631,6 +1641,9 @@ class GameEngine {
     if (state.thawMergeCount >= needed) {
       state.frozenRows.delete(row);
       state.thawMergeCount = 0;
+      if (this.boardRenderer) {
+        this.boardRenderer.frozenRows.delete(row);
+      }
       window.eventBus.emit('boss:thaw-row', { row });
       return true;
     }
