@@ -1190,8 +1190,8 @@ class GameEngine {
         return;
       }
 
-      // 更新发射器状态（约每秒更新4次，减少性能开销）
-      if (timestamp - this._lastFrameTime > 200) {
+      // 更新发射器状态（约每秒30次，确保冷却动画流畅）
+      if (timestamp - this._lastFrameTime > 33) {
         window.eventBus.emit('emitters:updated', this.state.emitters);
         this._lastFrameTime = timestamp;
       }

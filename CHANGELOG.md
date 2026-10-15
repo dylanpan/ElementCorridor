@@ -4,6 +4,14 @@
 
 ## 【v19】【2026-10-15】
 
+- **[Bug修复]** BoardRenderer.js — 修复冻结行中新放入元素无冻结动画的问题：新增 frozenRows 集合跟踪被冻结的行，updateCell 渲染元素后保留 cell-frozen 样式
+- **[Bug修复]** GameEngine.js — 在冻结/解冻/暴风雪结束时同步通知 BoardRenderer 更新 frozenRows
+- **[Bug修复]** UIManager.js — 暴风雪开始/结束时正确调用 applyFreezeEffect 显示/隐藏发射器冰冻特效
+- **[性能优化]** GameEngine._startGameLoop() — 冷却动画更新间隔从 200ms（5FPS）降低至 33ms（~30FPS），消除进度条卡顿感
+
+
+## 【v19】【2026-10-15】
+
 - **[Bug修复]** `BoardRenderer.js` — 修复冻结行中新放入元素无冻结动画的问题：
   - 新增 `frozenRows` 集合跟踪被冻结的行
   - `updateCell()` 在渲染元素后检查该行是否被冻结，保留 `cell-frozen` 样式
