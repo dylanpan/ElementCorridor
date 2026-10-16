@@ -2,6 +2,11 @@
 
 ---
 
+## 【v27】【2026-10-16】
+
+- **[Bug修复]** `_executeTripleMerge()` — 三重奏合成后未调用解冻逻辑（`_isRowFrozen` / `_updateThawProgress`），导致祝福「三重奏」下合成无法解除冻结状态
+
+
 ## 【v26】【2026-10-16】
 
 - **[Bug修复]** `_executeTripleMerge()` — 三重奏合成后未调用 `_extinguishOnMerge()` 灭火逻辑，导致祝福「三重奏」下合成无法扑灭燃烧状态

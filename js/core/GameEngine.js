@@ -2389,6 +2389,19 @@ class GameEngine {
       }
     }
 
+    // === Boss 机制：冰霜女巫 - 合成解冻 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_ice_witch') {
+      if (this._isRowFrozen(thirdRow)) {
+        const thawed = this._updateThawProgress(thirdRow);
+        if (thawed) {
+          window.eventBus.emit('notification', {
+            message: '❄ 三重奏解冻了冻结的行！',
+            type: 'merge',
+          });
+        }
+      }
+    }
+
     // ==================== 元素连锁反应检测（三合一） ====================
     if (this.isRogueMode) {
       const _now3 = Date.now();
