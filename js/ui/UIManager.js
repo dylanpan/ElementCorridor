@@ -1763,9 +1763,9 @@ class UIManager {
           <div class="boss-skill-card">
             <div class="boss-skill-header"><span class="boss-skill-icon">🌀</span><span class="boss-skill-title">混沌之核 · 混沌</span></div>
             <div class="boss-skill-body">
-              <div class="boss-skill-item">🌊 混沌波动：每 ${(m.waveInterval / 1000).toFixed(0)} 秒随机变化棋盘元素等级 ±${m.waveLevelRange}</div>
-              <div class="boss-skill-item">❓ 混沌生成：每 ${(m.chaosSpawnInterval / 1000).toFixed(0)} 秒生成混沌元素</div>
-              <div class="boss-skill-item">📋 刷新：订单需求每 20 秒全部刷新</div>
+              <div class="boss-skill-item">🌊 混沌波动：每 ${(m.waveInterval / 1000).toFixed(0)} 秒随机变化棋盘元素等级和类型 ±${m.waveLevelRange}</div>
+              <div class="boss-skill-item">❓ 混沌生成：每 ${(m.chaosSpawnInterval / 1000).toFixed(0)} 秒生成混沌元素（可与任意同等级元素合成）</div>
+              <div class="boss-skill-item">🔄 混沌刷新：订单需求每 20 秒全部刷新</div>
             </div>
           </div>`;
         break;
