@@ -110,6 +110,7 @@ class GameEngine {
       // 熔岩巨像
       scorchedCells: [],       // [{row, col, elementBurnAt, fireExpireAt}]
       lastScorchTime: 0,
+      lastSpreadTime: 0,
       isRageActive: false,
 
       // 冰霜女巫
@@ -1297,6 +1298,7 @@ class GameEngine {
       // 熔岩巨像
       scorchedCells: [],
       lastScorchTime: 0,
+      lastSpreadTime: 0,
       isRageActive: false,
 
       // 冰霜女巫
@@ -1424,6 +1426,10 @@ class GameEngine {
         emitter.modifiers.cooldownMultiplier = penalty;
       }
     } else if (!state.isRageActive && wasRageActive) {
+      window.eventBus.emit('notification', {
+        message: '✅ 熔岩巨像愤怒状态已解除！发射器冷却恢复正常',
+        type: 'info',
+      });
       window.eventBus.emit('boss:rage-deactivated', { bossId: 'boss_lava_giant' });
       // 恢复冷却倍率
       for (const emitter of this.state.emitters) {
@@ -1432,7 +1438,8 @@ class GameEngine {
     }
 
     // 5. 灼烧蔓延：每5秒有概率将灼烧扩散到相邻格子
-    if (state.scorchedCells.length > 0 && Math.random() < (mech.spreadChance || 0.4)) {
+    if (state.scorchedCells.length > 0 && now - state.lastSpreadTime > 3000 && Math.random() < (mech.spreadChance || 0.55)) {
+      state.lastSpreadTime = now;
       this._spreadScorch(duration);
     }
 

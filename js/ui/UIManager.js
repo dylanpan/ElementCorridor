@@ -1134,6 +1134,20 @@ class UIManager {
   }
 
   /**
+   * 应用/移除发射器愤怒火焰特效（熔岩巨像）
+   * @param {boolean} active - true=愤怒，false=解除
+   */
+  applyRageEffect(active) {
+    for (const btnData of this.emitterButtons) {
+      if (active) {
+        btnData.element.classList.add('emitter-raging');
+      } else {
+        btnData.element.classList.remove('emitter-raging');
+      }
+    }
+  }
+
+  /**
    * 更新加急订单倒计时进度条
    * @param {object} data - { remainingMs, totalDurationMs }
    */
@@ -1823,6 +1837,8 @@ class UIManager {
     if (hud) {
       hud.classList.add('boss-hud-rage');
     }
+    // 发射器火焰特效
+    this.applyRageEffect(true);
     // 屏幕边缘红色脉冲
     const pulse = document.createElement('div');
     pulse.className = 'boss-rage-pulse';
@@ -1841,6 +1857,8 @@ class UIManager {
     if (hud) {
       hud.classList.remove('boss-hud-rage');
     }
+    // 移除发射器火焰特效
+    this.applyRageEffect(false);
   }
 
   /** 冰霜女巫：冻结行 */
