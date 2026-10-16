@@ -555,4 +555,19 @@ class BoardRenderer {
     this.selectedCell = null;
     this.onCellClick = null;
   }
+
+  /** 刷新所有格子的燃烧视觉效果（由 GameEngine 在状态变更后调用） */
+  refreshScorchedCells(scorchedCells) {
+    // 先清除所有格子的燃烧样式
+    for (let r = 0; r < this.cells.length; r++) {
+      for (let c = 0; c < this.cells[r].length; c++) {
+        this.cells[r][c].classList.remove('cell-scorched');
+      }
+    }
+    // 再为当前燃烧的格子添加样式
+    for (const cell of scorchedCells) {
+      this.cells[cell.row]?.[cell.col]?.classList.add('cell-scorched');
+    }
+  }
+
 }

@@ -108,7 +108,7 @@ class GameEngine {
       lastTickTime: 0,
 
       // 熔岩巨像
-      scorchedCells: [],       // [{row, col, expireAt}]
+      scorchedCells: [],       // [{row, col, elementBurnAt, fireExpireAt}]
       lastScorchTime: 0,
       isRageActive: false,
 
@@ -1387,17 +1387,28 @@ class GameEngine {
 
   _tickLavaGiant(now, mech) {
     const state = this._bossState;
+    const duration = mech.scorchDuration || 5000;
 
     // 1. 灼烧蔓延：每 scorchInterval ms 灼烧一个格子
     if (now - state.lastScorchTime > (mech.scorchInterval || 15000)) {
       state.lastScorchTime = now;
-      this._applyScorch(mech.scorchDuration || 5000);
+      this._applyScorch(duration);
     }
 
-    // 2. 清理已过期的灼烧格子
-    state.scorchedCells = state.scorchedCells.filter(cell => cell.expireAt > now);
+    // 2. 检查元素烧毁：格子有元素且到烧毁时间 → 移除元素
+    for (const cell of state.scorchedCells) {
+      const el = this.state.board[cell.row]?.[cell.col];
+      if (el && cell.elementBurnAt && now >= cell.elementBurnAt) {
+        this.systems.spawn.removeElement(this.state.board, el);
+        this.boardRenderer.updateCell(this.state.board, cell.row, cell.col);
+        cell.elementBurnAt = null;
+      }
+    }
 
-    // 3. 愤怒状态检测：同时灼烧格子数 >= rageThreshold
+    // 3. 清理已熄灭的火焰
+    state.scorchedCells = state.scorchedCells.filter(cell => now < cell.fireExpireAt);
+
+    // 4. 愤怒状态检测：同时灼烧格子数 >= rageThreshold
     const wasRageActive = state.isRageActive;
     state.isRageActive = state.scorchedCells.length >= (mech.rageThreshold || 3);
 
@@ -1420,10 +1431,13 @@ class GameEngine {
       }
     }
 
-    // 4. 灼烧蔓延：每5秒有概率将灼烧扩散到相邻格子
+    // 5. 灼烧蔓延：每5秒有概率将灼烧扩散到相邻格子
     if (state.scorchedCells.length > 0 && Math.random() < (mech.spreadChance || 0.4)) {
-      this._spreadScorch(mech.scorchDuration || 5000);
+      this._spreadScorch(duration);
     }
+
+    // 6. 刷新燃烧视觉效果
+    this.boardRenderer.refreshScorchedCells(state.scorchedCells);
   }
 
   /** 灼烧一个随机格子 */
@@ -1432,6 +1446,7 @@ class GameEngine {
     const rows = board.length;
     const cols = board[0].length;
     const state = this._bossState;
+    const now = Date.now();
 
     // 找到未被灼烧的格子
     const scorchedSet = new Set(state.scorchedCells.map(c => `${c.row},${c.col}`));
@@ -1447,17 +1462,16 @@ class GameEngine {
     if (available.length === 0) return;
 
     const target = available[Math.floor(Math.random() * available.length)];
+    const el = board[target.row]?.[target.col];
+
     state.scorchedCells.push({
       row: target.row,
       col: target.col,
-      expireAt: Date.now() + duration,
+      // 如果格子有元素，记录烧毁时间（duration 后烧毁）；否则无元素可烧
+      elementBurnAt: el && !el._blocked ? now + duration : null,
+      // 火焰自行熄灭时间（比烧毁时间长，即使格子无元素也会熄灭）
+      fireExpireAt: now + duration * 2,
     });
-
-    // 如果格子上有元素，清除它
-    if (board[target.row][target.col] && !board[target.row][target.col]._blocked) {
-      this.systems.spawn.removeElement(board, board[target.row][target.col]);
-      this.boardRenderer.updateCell(board, target.row, target.col);
-    }
 
     window.eventBus.emit('boss:scorch-cell', { row: target.row, col: target.col, duration });
   }
@@ -1468,6 +1482,7 @@ class GameEngine {
     const board = this.state.board;
     const rows = board.length;
     const cols = board[0].length;
+    const now = Date.now();
     const scorchedSet = new Set(state.scorchedCells.map(c => `${c.row},${c.col}`));
 
     // 收集所有被灼烧格子的相邻格子
@@ -1487,16 +1502,14 @@ class GameEngine {
     if (neighbors.length === 0) return;
 
     const target = neighbors[Math.floor(Math.random() * neighbors.length)];
+    const el = board[target.row]?.[target.col];
+
     state.scorchedCells.push({
       row: target.row,
       col: target.col,
-      expireAt: Date.now() + duration,
+      elementBurnAt: el && !el._blocked ? now + duration : null,
+      fireExpireAt: now + duration * 2,
     });
-
-    if (board[target.row][target.col] && !board[target.row][target.col]._blocked) {
-      this.systems.spawn.removeElement(board, board[target.row][target.col]);
-      this.boardRenderer.updateCell(board, target.row, target.col);
-    }
 
     window.eventBus.emit('boss:scorch-cell', { row: target.row, col: target.col, duration });
   }
@@ -2083,6 +2096,17 @@ class GameEngine {
       this.systems.spawn.placeElement(this.state.board, el, emptyCell.row, emptyCell.col);
       this.boardRenderer.updateCell(this.state.board, emptyCell.row, emptyCell.col);
       this.boardRenderer.playSpawnAnimation(emptyCell.row, emptyCell.col);
+      // 熔岩巨像：如果放到燃烧格子，标记元素烧毁倒计时
+      if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
+        const scorchedCell = this._bossState.scorchedCells.find(
+          c => c.row === emptyCell.row && c.col === emptyCell.col
+        );
+        if (scorchedCell) {
+          scorchedCell.elementBurnAt = Date.now() + (this._currentBossConfig.mechanics.scorchDuration || 5000);
+        }
+      // 刷新燃烧视觉效果
+      this.boardRenderer.refreshScorchedCells(this._bossState.scorchedCells);
+      }
     }
 
     // 更新发射器UI
@@ -2102,24 +2126,30 @@ class GameEngine {
   _onCellClick(row, col) {
     if (!this.state.isPlaying || this.state.isPaused) return;
 
-    // === 熔岩巨像：灼烧格子检查 ===
-    if (this._isCellScorched(row, col)) {
-      return;
-    }
-
     // === 冰霜女巫冻结行交互 ===
     // 冻结行元素只能作为被合成的目标（被动方）
     // 下方已有「选中冻结行元素→取消选中」的逻辑，确保不能主动合成
     let selected = this.boardRenderer.selectedCell;
     if (selected) {
-      if (this._isCellScorched(selected.row, selected.col) ||
-          this._isRowFrozen(selected.row)) {
+      if (this._isRowFrozen(selected.row)) {
         this.boardRenderer.deselectCell();
         return;
       }
     }
 
     const clickedElement = this.state.board[row][col];
+
+    // === 熔岩巨像：灼烧格子交互规则 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
+      const scorchedCell = this._bossState.scorchedCells.find(c => c.row === row && c.col === col);
+      if (scorchedCell) {
+        // 燃烧空格 + 无选中 → 阻止后续交互
+        if (!clickedElement && !selected) {
+          return;
+        }
+        // 有元素或已有选中 → 允许选中/移动/合成，由下方通用逻辑处理
+      }
+    }
 
     // === 创世之灵：镜像元素不可操作 ===
     if (clickedElement && this._isMirrorElement(clickedElement)) {
@@ -2181,6 +2211,30 @@ class GameEngine {
         this.state.board, selectedEl, row, col
       );
       if (success) {
+        // 熔岩巨像：燃烧状态跟随元素移动（规则3）
+        if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
+          const oldScorch = this._bossState.scorchedCells.find(
+            c => c.row === selected.row && c.col === selected.col
+          );
+          if (oldScorch) {
+            // 源格子有燃烧状态 → 转移到新位置
+            oldScorch.row = row;
+            oldScorch.col = col;
+            // 重置烧毁计时器（从移动到新位置开始重新计时）
+            oldScorch.elementBurnAt = Date.now() + (this._currentBossConfig.mechanics.scorchDuration || 5000);
+          } else {
+            // 源格子没有燃烧，但目标格子可能正在燃烧
+            const newScorch = this._bossState.scorchedCells.find(
+              c => c.row === row && c.col === col
+            );
+            if (newScorch) {
+              // 元素移入燃烧格子，记录烧毁时间
+              newScorch.elementBurnAt = Date.now() + (this._currentBossConfig.mechanics.scorchDuration || 5000);
+            }
+          }
+          // 刷新燃烧视觉效果
+          this.boardRenderer.refreshScorchedCells(this._bossState.scorchedCells);
+        }
         this.boardRenderer.updateCell(this.state.board, selected.row, selected.col);
         this.boardRenderer.updateCell(this.state.board, row, col);
         this.boardRenderer.deselectCell();
@@ -2485,16 +2539,16 @@ class GameEngine {
 
     // === Boss 机制：熔岩巨像 - 合成灭火 ===
     if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
-      const extinguished = this._extinguishOnMerge(toPos.row, toPos.col);
-      // 如果目标位置是灼烧格子，额外通知
-      if (extinguished) {
+      const e1 = this._extinguishOnMerge(toPos.row, toPos.col);
+      const e2 = this._extinguishOnMerge(fromPos.row, fromPos.col);
+      if (e1 || e2) {
+        // 刷新燃烧视觉效果
+        this.boardRenderer.refreshScorchedCells(this._bossState.scorchedCells);
         window.eventBus.emit('notification', {
           message: '🔥 合成扑灭了灼烧！',
           type: 'merge',
         });
       }
-      // 也检查消耗元素的来源位置
-      this._extinguishOnMerge(fromPos.row, fromPos.col);
     }
 
     // === Boss 机制：冰霜女巫 - 合成解冻 ===

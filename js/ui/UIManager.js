@@ -1798,10 +1798,10 @@ class UIManager {
     if (!cellEl) return;
 
     cellEl.classList.add('cell-scorched');
-    // data.duration ms 后自动移除
+    // 火焰持续到 fireExpireAt（自行熄灭时间 = duration * 2）
     setTimeout(() => {
       cellEl.classList.remove('cell-scorched');
-    }, data.duration);
+    }, data.duration * 2);
   }
 
   /** 熔岩巨像：灭火 */

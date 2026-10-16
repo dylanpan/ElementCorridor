@@ -2,6 +2,36 @@
 
 ---
 
+## 【v21】【2026-10-16】
+
+- **[Bug修复]** BoardRenderer.js — 新增 refreshScorchedCells() 方法统一刷新燃烧视觉样式，解决元素移动/产出到燃烧格子后缺少燃烧动画的问题
+- **[代码重构]** GameEngine._tickLavaGiant() — 每次 tick 末尾调用 refreshScorchedCells 同步火焰特效
+- **[代码重构]** GameEngine._onEmitterClick() — spawn 到燃烧格子后刷新视觉效果
+- **[代码重构]** GameEngine._onCellClick() — 移动元素到燃烧格子后刷新视觉效果
+- **[代码重构]** GameEngine._executeMerge() — 合成灭火后刷新视觉效果
+
+
+## 【v20】【2026-10-16】
+
+- **[机制重构]** 熔岩巨像灼烧系统 — 重新设计灼烧格子规则：① 燃烧空格可放入元素；② 元素不会立即烧毁，5秒后烧毁；③ 移动元素时燃烧状态跟随；④ 合成可扑灭燃烧；⑤ 空燃烧格10秒自行熄灭；⑥ 保持40%概率蔓延
+- **[代码重构]** GameEngine.js — scorchedCells 数据结构从 {row,col,expireAt} 改为 {row,col,elementBurnAt,fireExpireAt}
+- **[代码重构]** _tickLavaGiant() — 新增元素烧毁检查 + 火焰自然熄灭清理逻辑
+- **[代码重构]** _applyScorch/_spreadScorch() — 不再立即摧毁元素，改为设置 elementBurnAt 倒计时
+- **[功能更新]** _onCellClick() — 简化灼烧交互块，仅拦截空燃烧格+无选中场景；允许选中/移动/合成燃烧格上的元素
+- **[功能更新]** _onEmitterClick() — 允许将新元素放到燃烧格子，设置元素烧毁倒计时
+- **[功能更新]** 元素移动逻辑 — 从燃烧格移动元素时，燃烧状态跟随到新位置
+- **[Bug修复]** UIManager._onBossScorchCell() — 火焰特效持续时间改为 duration*2，匹配自行熄灭时间
+
+
+## 【v19】【2026-10-15】
+
+- **[Bug修复]** BoardRenderer.js — 修复冻结行中新放入元素无冻结动画的问题：新增 frozenRows 集合跟踪被冻结的行，updateCell 渲染元素后保留 cell-frozen 样式
+- **[Bug修复]** GameEngine.js — 在冻结/解冻/暴风雪结束时同步通知 BoardRenderer 更新 frozenRows
+- **[Bug修复]** UIManager.js — 暴风雪开始/结束时正确调用 applyFreezeEffect 显示/隐藏发射器冰冻特效
+- **[性能优化]** GameEngine._startGameLoop() — 冷却动画更新间隔从 200ms（5FPS）降低至 33ms（~30FPS），消除进度条卡顿感
+- **[Bug修复]** GameEngine._onEmitterClick() — 熔岩巨像战中，发射器产出的元素不再放到正在燃烧的格子中
+
+
 ## 【v19】【2026-10-15】
 
 - **[Bug修复]** BoardRenderer.js — 修复冻结行中新放入元素无冻结动画的问题：新增 frozenRows 集合跟踪被冻结的行，updateCell 渲染元素后保留 cell-frozen 样式
