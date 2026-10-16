@@ -2375,6 +2375,20 @@ class GameEngine {
       type: 'merge',
     });
 
+    // === Boss 机制：熔岩巨像 - 合成灭火 ===
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_lava_giant') {
+      const e1 = this._extinguishOnMerge(thirdRow, thirdCol);
+      const e2 = this._extinguishOnMerge(candidates[0].row, candidates[0].col);
+      const e3 = this._extinguishOnMerge(candidates[1].row, candidates[1].col);
+      if (e1 || e2 || e3) {
+        this.boardRenderer.refreshScorchedCells(this._bossState.scorchedCells);
+        window.eventBus.emit('notification', {
+          message: '🔥 三重奏扑灭了灼烧！',
+          type: 'merge',
+        });
+      }
+    }
+
     // ==================== 元素连锁反应检测（三合一） ====================
     if (this.isRogueMode) {
       const _now3 = Date.now();
