@@ -229,6 +229,7 @@ class UIManager {
       this._onBossVictory(data);
     });
     window.eventBus.on('boss:defeated', (data) => {
+      console.log('[UI] 收到 boss:defeated 事件, data=', JSON.stringify(data));
       this._onBossDefeated(data);
     });
 
@@ -2072,6 +2073,15 @@ class UIManager {
     // 隐藏左侧 Boss 技能面板
     this._hideBossInfo();
 
+    // 显示游戏结束弹窗
+    const reason = data?.reason || '战斗失败';
+    this.showModal('💀 战斗失败', '<p style="font-size:18px;margin:12px 0;">' + reason + '</p><p style="color:#888;font-size:14px;">点击确定返回肉鸽地图</p>');
+
+    // 设置弹窗按钮回调：刷新页面回到肉鸽地图
+    this.setModalButtonCallback(() => {
+      window.location.reload();
+    });
+
     const flash = document.createElement('div');
     flash.className = 'boss-defeated-flash';
     document.body.appendChild(flash);
@@ -2079,7 +2089,7 @@ class UIManager {
     flash.classList.add('show');
     setTimeout(() => {
       flash.classList.remove('show');
-      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 500);
+      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 400);
     }, 1500);
   }
 

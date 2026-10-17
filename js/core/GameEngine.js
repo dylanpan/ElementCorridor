@@ -2298,6 +2298,8 @@ class GameEngine {
 
       lastDevourTime: 0,
 
+      lastDevourColumnTime: 0,
+
       timeLimit: config.mechanics.timeLimit || 120000,
 
       levelStartTime: Date.now(),
@@ -3140,11 +3142,13 @@ class GameEngine {
 
     const state = this._bossState;
 
-    // 1. 吞噬倒计时递减
+    // 1. 吞噬倒计时递减（限制单次最大递减量，防止页面闲置后瞬间超时）
 
-    const elapsed = now - (state.lastDevourTime || state.levelStartTime);
+    const rawElapsed = now - (state.lastDevourTime || state.levelStartTime);
 
-    if (elapsed > 200) {
+    const elapsed = Math.min(rawElapsed, 2000); // 单次最多减2秒
+
+    if (elapsed > 50) {
 
       state.devourTimer -= elapsed;
 
@@ -3166,11 +3170,11 @@ class GameEngine {
 
     }
 
-    // 3. 列吞噬：每 devourInterval ms 吞噬一列
+    // 3. 列吞噬：每 devourInterval ms 吞噬一列（使用独立计时）
 
-    if (now - state.lastDevourTime > (mech.devourInterval || 12000)) {
+    if (now - state.lastDevourColumnTime > (mech.devourInterval || 12000)) {
 
-      state.lastDevourTime = now;
+      state.lastDevourColumnTime = now;
 
       this._devourColumn();
 
@@ -3398,6 +3402,10 @@ class GameEngine {
 
     this.state.isPlaying = false;
 
+    this._bossState.isActive = false;
+
+    this._currentBossConfig = null;
+
     window.eventBus.emit('boss:defeated', { reason });
 
     window.eventBus.emit('notification', {
@@ -3412,13 +3420,13 @@ class GameEngine {
 
     setTimeout(() => {
 
-      if (this.rogueSystem) {
+      if (this.rogueSystem && typeof this.rogueSystem.onNodeFailed === 'function') {
 
         this.rogueSystem.onNodeFailed(this.currentRogueNode);
 
       }
 
-    }, 2000);
+    }, 2500);
 
   }
 

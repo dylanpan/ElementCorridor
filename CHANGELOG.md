@@ -1,3 +1,10 @@
+【v31】【2026-10-17】
+- 修复：时间吞噬者倒计时结束后未弹出游戏结束（限制单次最大递减量2000ms，防止页面闲置后瞬间超时）
+- 修复：列吞噬只在开局触发一次后永不再触发（lastDevourTime 被倒计时与吞噬间隔共用，分离为独立变量 lastDevourColumnTime）
+- 修复：UI层 _onBossDefeated 缺少弹窗按钮回调，点击确定无反应
+- 修复：_onBossDefeat 中 this.rogueSystem.onNodeFailed 类型检查缺失导致报错
+- 清理：移除诊断日志
+
 【v30】【2026-10-16】
 - 修复：混沌元素缺少 serialize() 方法导致的控制台报错（Uncaught TypeError: el.serialize is not a function）
 - 修复：混沌元素之间不能合成（为 _executeTripleMerge 添加类型检查，混沌元素先转化为候选类型再匹配）
