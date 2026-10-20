@@ -4834,7 +4834,7 @@ class GameEngine {
 
       const lowerLevel = Math.max(1, merged.level - 1);
 
-      const chainEl = new Element(merged.elementType, lowerLevel);
+      const chainEl = new Element(merged.typeId, lowerLevel);
 
       const emptyCell = this.systems.spawn.findEmptyCell(this.state.board);
 
