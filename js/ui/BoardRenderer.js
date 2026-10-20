@@ -361,6 +361,10 @@ class BoardRenderer {
     if (this.frozenRows.has(row)) {
       cell.classList.add('cell-frozen');
     }
+    // 时间吞噬者：被吞噬的格子保持特殊样式
+    if (cell.dataset.devoured === 'true') {
+      cell.classList.add('cell-devoured-persistent');
+    }
   }
 
   /**

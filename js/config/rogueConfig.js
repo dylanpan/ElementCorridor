@@ -552,7 +552,7 @@ const BOSS_CONFIGS = [
     name: '时间吞噬者',
     icon: '⏳',
     floor: 12,
-    description: '每关限时 90 秒，倒计时结束后强制失败',
+    description: '每关限时 120 秒，倒计时结束后强制失败',
     targetScoreMultiplier: 2.5,
     specialRule: 'timed',
     mechanics: {

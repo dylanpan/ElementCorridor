@@ -1428,7 +1428,21 @@ class GameEngine {
 
       const element = new Element(randomType, 1);
 
-      const emptyCell = this.systems.spawn.findEmptyCell(board);
+      // 手动扫描棋盘，跳过被吞噬的格子
+      let emptyCell = null;
+      for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+          if (!board[r][c]) {
+            if (this._bossState.isActive && this._bossState.bossId === 'boss_time_devourer' &&
+                this._bossState.devouredCells.has(r + ',' + c)) {
+              continue;
+            }
+            emptyCell = { row: r, col: c };
+            break;
+          }
+        }
+        if (emptyCell) break;
+      }
 
       if (!emptyCell) return;
 
@@ -2298,11 +2312,13 @@ class GameEngine {
 
       lastDevourTime: 0,
 
-      lastDevourColumnTime: 0,
+      lastDevourCellTime: 0,
 
       timeLimit: config.mechanics.timeLimit || 120000,
 
       levelStartTime: Date.now(),
+
+      devouredCells: new Set(),
 
       // 创世之灵
 
@@ -3170,49 +3186,96 @@ class GameEngine {
 
     }
 
-    // 3. 列吞噬：每 devourInterval ms 吞噬一列（使用独立计时）
+    // 3. 格子吞噬：每 devourInterval ms 吞噬一个匹配订单需求的格子（使用独立计时）
 
-    if (now - state.lastDevourColumnTime > (mech.devourInterval || 12000)) {
+    if (now - state.lastDevourCellTime > (mech.devourInterval || 9000)) {
 
-      state.lastDevourColumnTime = now;
+      state.lastDevourCellTime = now;
 
-      this._devourColumn();
+      this._devourCell();
 
     }
 
   }
 
-  /** 吞噬一列 */
+  /** 吞噬一个匹配订单需求的格子 */
 
-  _devourColumn() {
+  _devourCell() {
 
     const board = this.state.board;
 
-    const cols = board[0].length;
+    const state = this._bossState;
 
-    const col = Math.floor(Math.random() * cols);
+    // 获取当前活跃订单的元素类型集合
 
-    // 清除该列所有元素
+    const orders = this.systems.order.getOrders();
+
+    const orderTypes = new Set(orders.map(o => o.elementType));
+
+    if (orderTypes.size === 0) return;
+
+    // 收集棋盘上所有匹配订单类型的元素格子（排除已被吞噬的）
+
+    const candidates = [];
 
     for (let r = 0; r < board.length; r++) {
 
-      if (board[r][col]) {
+      for (let c = 0; c < board[r].length; c++) {
 
-        this.systems.spawn.removeElement(board, board[r][col]);
+        const el = board[r][c];
 
-        board[r][col] = null;
+        if (el && orderTypes.has(el.typeId) && !state.devouredCells.has(r + ',' + c)) {
 
-        this.boardRenderer.updateCell(board, r, col);
+          candidates.push({ row: r, col: c });
+
+        }
 
       }
 
     }
 
-    window.eventBus.emit('boss:devour-column', { col });
+    if (candidates.length === 0) {
+
+      // 没有可吞噬的目标了
+      // 先检查棋盘是否完全为空（开局时棋盘空是正常状态，不触发失败）
+      let hasAnyElement = false;
+      for (let r = 0; r < board.length && !hasAnyElement; r++) {
+        for (let c = 0; c < board[r].length && !hasAnyElement; c++) {
+          if (board[r][c]) hasAnyElement = true;
+        }
+      }
+      if (!hasAnyElement) return;
+
+      // 棋盘上有元素但没有匹配订单类型的了，且未达标 → 失败
+      if (this.state.score < this.state.targetScore) {
+
+        this._onBossDefeat('时间吞噬者吞噬了所有可用元素！');
+
+      }
+
+      return;
+
+    }
+
+    // 随机选择一个格子吞噬
+
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+
+    const el = board[target.row][target.col];
+
+    this.systems.spawn.removeElement(board, el);
+
+    board[target.row][target.col] = null;
+
+    state.devouredCells.add(target.row + ',' + target.col);
+
+    this.boardRenderer.updateCell(board, target.row, target.col);
+
+    window.eventBus.emit('boss:devour-cell', { row: target.row, col: target.col });
 
     window.eventBus.emit('notification', {
 
-      message: `⏳ 时间吞噬者吞噬了第 ${col + 1} 列！`,
+      message: '⏳ 时间吞噬者吞噬了一个 ' + el.icon + ' 元素！',
 
       type: 'warning',
 
@@ -3231,6 +3294,8 @@ class GameEngine {
     const delay = this._currentBossConfig.mechanics.orderDelay || 3000;
 
     state.devourTimer += delay;
+
+    state.lastDevourCellTime = Date.now();
 
     window.eventBus.emit('boss:devour-delayed', { delay });
 
@@ -3726,7 +3791,34 @@ class GameEngine {
 
     for (const el of elements) {
 
-      const emptyCell = this.systems.spawn.findEmptyCell(this.state.board);
+      let emptyCell = null;
+
+      // 手动扫描棋盘，跳过被吞噬的格子
+      for (let r = 0; r < this.state.board.length; r++) {
+
+        for (let c = 0; c < this.state.board[r].length; c++) {
+
+          if (!this.state.board[r][c]) {
+
+            if (this._bossState.isActive && this._bossState.bossId === 'boss_time_devourer' &&
+
+                this._bossState.devouredCells.has(r + ',' + c)) {
+
+              continue;
+
+            }
+
+            emptyCell = { row: r, col: c };
+
+            break;
+
+          }
+
+        }
+
+        if (emptyCell) break;
+
+      }
 
       if (!emptyCell) break;
 
@@ -3827,6 +3919,26 @@ class GameEngine {
         }
 
         // 有元素或已有选中 → 允许选中/移动/合成，由下方通用逻辑处理
+
+      }
+
+    }
+
+    // === 时间吞噬者：被吞噬的格子不可交互 ===
+
+    if (this._bossState.isActive && this._bossState.bossId === 'boss_time_devourer') {
+
+      if (this._bossState.devouredCells.has(row + ',' + col)) {
+
+        return;
+
+      }
+
+      if (selected && selected.element && this._bossState.devouredCells.has(selected.row + ',' + selected.col)) {
+
+        this.boardRenderer.deselectCell();
+
+        return;
 
       }
 

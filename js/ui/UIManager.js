@@ -213,6 +213,9 @@ class UIManager {
     window.eventBus.on('boss:devour-timer', (data) => {
       this._onBossDevourTimer(data);
     });
+    window.eventBus.on('boss:devour-cell', (data) => {
+      this._onBossDevourCell(data);
+    });
     window.eventBus.on('boss:devour-column', (data) => {
       this._onBossDevourColumn(data);
     });
@@ -1976,6 +1979,18 @@ class UIManager {
       timerEl.classList.remove('devour-timer-critical');
     } else {
       timerEl.classList.remove('devour-timer-warning', 'devour-timer-critical');
+    }
+  }
+
+  /** 时间吞噬者：吞噬格子 */
+  _onBossDevourCell(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (cellEl) {
+      cellEl.dataset.devoured = 'true';
+      cellEl.classList.add('cell-devoured-persistent');
+      cellEl.innerHTML = '';
     }
   }
 
