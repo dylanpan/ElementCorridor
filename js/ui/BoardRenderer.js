@@ -304,10 +304,7 @@ class BoardRenderer {
     cell.innerHTML = '';
 
     if (element) {
-      // 检查是否有元素共鸣等级加成
-      const hasBoost = element._resonanceBoost;
-      const displayLevel = hasBoost ? Math.min(element.level + 1, ELEMENT_LEVELS.length) : element.level;
-      const levelConfig = ELEMENT_LEVELS[displayLevel - 1];
+      const levelConfig = ELEMENT_LEVELS[element.level - 1];
       const typeConfig = ELEMENT_TYPES[element.typeId];
 
       cell.className = `board-cell has-element ${levelConfig?.borderClass || ''}`;
@@ -315,16 +312,16 @@ class BoardRenderer {
       const elDiv = document.createElement('div');
       elDiv.className = 'element-icon';
       elDiv.textContent = element.icon;
-      if (hasBoost) {
+      if (element._resonanceBoost) {
         elDiv.style.textShadow = `0 0 8px ${typeConfig?.color || '#ffd700'}, 0 0 16px rgba(255,215,0,0.4)`;
       }
       cell.appendChild(elDiv);
 
       const levelBadge = document.createElement('div');
       levelBadge.className = 'element-level';
-      levelBadge.textContent = hasBoost ? `Lv.${displayLevel}✨` : `Lv.${element.level}`;
+      levelBadge.textContent = element._resonanceBoost ? `Lv.${element.level}✨` : `Lv.${element.level}`;
       levelBadge.style.color = typeConfig?.color || '#999';
-      if (hasBoost) {
+      if (element._resonanceBoost) {
         levelBadge.style.fontWeight = 'bold';
         levelBadge.style.textShadow = `0 0 6px ${typeConfig?.color || '#ffd700'}`;
       }
@@ -341,9 +338,9 @@ class BoardRenderer {
       // 元素共鸣状态
       if (element._resonanceBoost) {
         cell.classList.add('resonating');
-        // 使用提升后等级的颜色动态设置光晕
+        // 使用当前等级的颜色动态设置光晕
         const boostColor = getComputedStyle(document.documentElement)
-          .getPropertyValue(`--level-${displayLevel}-border`).trim() || '#ffd700';
+          .getPropertyValue(`--level-${element.level}-border`).trim() || '#ffd700';
         cell.style.boxShadow =
           `inset 0 0 16px ${boostColor}55, 0 0 20px ${boostColor}40, 0 0 45px ${boostColor}20`;
         cell.style.borderColor = boostColor;

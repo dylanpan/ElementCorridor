@@ -4982,9 +4982,12 @@ class GameEngine {
 
           resonatingCells.push({ row: r, col: c });
 
-          // 标记临时等级加成
-
-          el._resonanceBoost = true;
+          // 保存原始等级并实际提升一级
+          if (!el._resonanceBoost) {
+            el._originalLevel = el.level;
+            el.level = Math.min(el.level + 1, ELEMENT_LEVELS.length);
+            el._resonanceBoost = true;
+          }
 
         }
 
@@ -5024,6 +5027,9 @@ class GameEngine {
 
           if (el && el._resonanceBoost) {
 
+            // 恢复原始等级
+            el.level = el._originalLevel;
+            delete el._originalLevel;
             delete el._resonanceBoost;
 
             this.boardRenderer.updateCell(this.state.board, r, c);
