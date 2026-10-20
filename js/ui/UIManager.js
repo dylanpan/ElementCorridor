@@ -1965,7 +1965,14 @@ class UIManager {
       timerEl = document.createElement('div');
       timerEl.id = 'devour-timer';
       timerEl.className = 'devour-timer';
-      document.body.appendChild(timerEl);
+      // 插入到棋盘正上方、祝福栏正下方
+      const boardContainer = document.getElementById('board-container');
+      const gameBoard = document.getElementById('game-board');
+      if (boardContainer && gameBoard) {
+        boardContainer.insertBefore(timerEl, gameBoard);
+      } else {
+        document.body.appendChild(timerEl);
+      }
     }
 
     const remainingSec = Math.ceil(data.remaining / 1000);

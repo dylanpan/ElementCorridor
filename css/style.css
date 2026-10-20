@@ -3288,14 +3288,12 @@ body {
 
 /* 吞噬倒计时 */
 .devour-timer {
-  position: fixed;
-  top: 64px;
-  right: 84px;
+  text-align: center;
+  padding: 6px 0 8px 0;
   font-size: 22px;
   font-weight: bold;
   color: #ffaa00;
   text-shadow: 0 0 16px rgba(255, 170, 0, 0.4), 0 2px 8px rgba(0,0,0,0.6);
-  z-index: 995;
   font-family: 'Courier New', monospace;
   transition: all 0.3s ease;
 }
