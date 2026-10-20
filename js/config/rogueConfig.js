@@ -559,7 +559,7 @@ const BOSS_CONFIGS = [
       /** 总时限(ms) */
       timeLimit: 120000,
       /** 吞噬间隔(ms) */
-      devourInterval: 12000,
+      devourInterval: 10000,
       /** 提交订单延缓吞噬时间(ms) */
       orderDelay: 3000,
     },
