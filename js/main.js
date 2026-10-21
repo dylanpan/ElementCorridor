@@ -471,13 +471,19 @@
     if (boardBoonArea && boonSystem) {
       const boons = boonSystem.getBoonSummary();
       const curses = boonSystem.getCurseSummary();
+      const sealedIds = boonSystem.sealedBoons || [];
+      console.log('[DEBUG main] updateRogueStatusBar: sealedIds=', JSON.stringify(sealedIds), 'boons=', JSON.stringify(boons));
       let html = '';
       for (const b of boons) {
-        html += `<span class="rogue-boon-icon rogue-boon-${b.rarity}">
+        const isSealed = sealedIds.includes(b.id);
+        const sealedClass = isSealed ? ' rogue-boon-sealed' : '';
+        html += `<span class="rogue-boon-icon rogue-boon-${b.rarity}${sealedClass}" data-boon-id="${b.id}">
+          ${isSealed ? '<span class="rogue-boon-seal-overlay">🔒</span>' : ''}
           ${b.icon}
           <div class="rogue-item-tooltip">
             <div class="rogue-tooltip-name">${b.icon} ${b.name}</div>
             <div class="rogue-tooltip-desc">${b.description || ''}</div>
+            ${isSealed ? '<div class="rogue-tooltip-sealed">🔒 已被封印</div>' : ''}
           </div>
         </span>`;
       }
@@ -579,6 +585,7 @@
     });
 
     window.eventBus.on('rogue:boons-updated', () => {
+      console.log('[DEBUG main] 收到 rogue:boons-updated 事件');
       updateRogueStatusBar();
     });
 

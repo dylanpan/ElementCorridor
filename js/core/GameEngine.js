@@ -620,6 +620,10 @@ class GameEngine {
 
     this.state.emitters = EMITTER_CONFIGS.map((config) => new Emitter(config));
 
+    // 保存发射器初始修饰器（用于祝福封印时还原）
+
+    this.state.emitterBaseModifiers = this.state.emitters.map(e => JSON.parse(JSON.stringify(e.modifiers)));
+
     // 检查诅咒升级（按当前层数）
 
     if (this.boonSystem) {
@@ -2020,6 +2024,10 @@ class GameEngine {
 
     }).filter(Boolean);
 
+    // 保存发射器初始修饰器（用于祝福封印时还原）
+
+    this.state.emitterBaseModifiers = this.state.emitters.map(e => JSON.parse(JSON.stringify(e.modifiers)));
+
     // 应用祝福到发射器（如果有肉鸽祝福系统）
 
     if (this.boonSystem) {
@@ -2332,29 +2340,76 @@ class GameEngine {
 
       unsealOrder: [],
 
+      tempUnsealedBoon: null,       // 当前临时解封的祝福ID
+
+      tempUnsealExpireAt: 0,        // 临时解封到期时间戳
+
+      tempUnsealBoonObj: null,      // 缓存的祝福对象（用于重新封印时还原）
+
     };
 
-    // === 创世之灵：封印所有祝福 + 发射器无冷却 + 棋盘扩大 ===
+    // === 创世之灵：封印所有祝福 + 棋盘扩大 ===
 
     if (bossId === 'boss_creation_spirit' && this.boonSystem) {
 
-      const allBoons = this.boonSystem.getCurrentBoons ? this.boonSystem.getCurrentBoons() : [];
+      const allBoons = this.boonSystem.getBoonSummary ? this.boonSystem.getBoonSummary() : [];
+      console.log('[DEBUG] 创世之灵封印祝福: allBoons=', JSON.stringify(allBoons));
 
       this._bossState.sealedBoons = allBoons.map(b => b.id);
 
       this._bossState.unsealOrder = [...this._bossState.sealedBoons];
 
+      this._bossState.tempUnsealedBoon = null;
+
+      this._bossState.tempUnsealExpireAt = 0;
+
+      this._bossState.tempUnsealBoonObj = null;
+      console.log('[DEBUG] 创世之灵 sealedBoons=', JSON.stringify(this._bossState.sealedBoons));
+
       // 通知 BoonSystem 哪些祝福被封印
 
       this.boonSystem.sealedBoons = this._bossState.sealedBoons;
+      console.log('[DEBUG] boonSystem.sealedBoons 已设置=', JSON.stringify(this.boonSystem.sealedBoons));
 
-      // 发射器无冷却
+      // 触发封印视觉特效事件
 
-      if (this.state.emitters) {
+      console.log('[DEBUG] 即将触发 boss:boon-sealed 事件');
+      window.eventBus.emit('boss:boon-sealed', { sealedBoons: this._bossState.sealedBoons, allBoons: allBoons });
 
-        for (const emitter of this.state.emitters) {
+      // 延迟封印：监听祝福加载完成，确保所有祝福都被封印
+      if (!this._sealBoonsHandler) {
+        this._sealBoonsHandler = () => {
+          if (this._bossState && this._bossState.isActive && this.boonSystem) {
+            const laterBoons = this.boonSystem.getBoonSummary ? this.boonSystem.getBoonSummary() : [];
+            if (laterBoons.length > 0 && this._bossState.sealedBoons.length === 0) {
+              console.log('[DEBUG] 延迟封印祝福: laterBoons=', JSON.stringify(laterBoons));
+              this._bossState.sealedBoons = laterBoons.map(b => b.id);
+              this._bossState.unsealOrder = [...this._bossState.sealedBoons];
+              this.boonSystem.sealedBoons = this._bossState.sealedBoons;
+              window.eventBus.emit('boss:boon-sealed', { sealedBoons: this._bossState.sealedBoons, allBoons: laterBoons });
+            }
+          }
+        };
+        window.eventBus.on('rogue:boons-updated', this._sealBoonsHandler);
+      }
 
-          emitter.modifiers.cooldownMultiplier = 0;
+      // 封印祝福：还原发射器初始修饰器（移除所有祝福效果）
+
+      if (this.state.emitters && this.state.emitterBaseModifiers) {
+
+        for (let i = 0; i < this.state.emitters.length; i++) {
+
+          const emitter = this.state.emitters[i];
+
+          const base = this.state.emitterBaseModifiers[i];
+
+          if (base) {
+
+            // 还原初始修饰器
+
+            Object.assign(emitter.modifiers, JSON.parse(JSON.stringify(base)));
+
+          }
 
         }
 
@@ -3307,9 +3362,17 @@ class GameEngine {
 
     const state = this._bossState;
 
-    // 1. 祝福解封：每 unsealInterval ms 解封一个祝福
+    // 1. 检查当前临时解封的祝福是否到期
 
-    if (state.unsealOrder.length > 0 && now - state.lastUnsealTime > (mech.unsealInterval || 30000)) {
+    if (state.tempUnsealedBoon && now >= state.tempUnsealExpireAt) {
+
+      this._reSealBoon();
+
+    }
+
+    // 2. 祝福解封：每 unsealInterval ms 随机临时解封一个祝福
+
+    if (state.sealedBoons.length > 0 && now - state.lastUnsealTime > (mech.unsealInterval || 8000)) {
 
       state.lastUnsealTime = now;
 
@@ -3317,7 +3380,7 @@ class GameEngine {
 
     }
 
-    // 2. 镜像召唤：每 mirrorInterval ms 召唤一个镜像
+    // 3. 镜像召唤：每 mirrorInterval ms 召唤一个镜像
 
     if (now - state.lastMirrorTime > (mech.mirrorInterval || 20000)) {
 
@@ -3327,11 +3390,80 @@ class GameEngine {
 
     }
 
-    // 3. 清理过期镜像
+    // 3. 清理过期镜像（从棋盘移除）
 
+    const expiredMirrors = state.mirrors.filter(m => m.expireAt <= now);
+    for (const m of expiredMirrors) {
+      if (this.state.board[m.row] && this.state.board[m.row][m.col]) {
+        this.state.board[m.row][m.col] = null;
+        this.boardRenderer.updateCell(this.state.board, m.row, m.col);
+      }
+      window.eventBus.emit('boss:mirror-expired', { row: m.row, col: m.col });
+    }
     state.mirrors = state.mirrors.filter(m => m.expireAt > now);
 
   }
+  /** 重新封印祝福（临时解封到期） */
+
+  _reSealBoon() {
+
+    const state = this._bossState;
+
+    if (!state.tempUnsealedBoon) return;
+
+    const boonId = state.tempUnsealedBoon;
+
+    console.log('[DEBUG] 重新封印祝福:', boonId);
+
+    // 将该祝福放回封印列表
+
+    state.sealedBoons.push(boonId);
+
+    // 还原发射器修饰器（移除该祝福的效果）
+
+    if (this.state.emitters && this.state.emitterBaseModifiers) {
+
+      for (let i = 0; i < this.state.emitters.length; i++) {
+
+        const emitter = this.state.emitters[i];
+
+        const base = this.state.emitterBaseModifiers[i];
+
+        if (base) {
+
+          Object.assign(emitter.modifiers, JSON.parse(JSON.stringify(base)));
+
+        }
+
+        // 祝福被封印，发射器正常运作
+
+      }
+
+    }
+
+    // 清除临时解封状态
+
+    state.tempUnsealedBoon = null;
+
+    state.tempUnsealExpireAt = 0;
+
+    state.tempUnsealBoonObj = null;
+
+    // 触发重新封印事件
+
+    window.eventBus.emit('boss:boon-sealed', { sealedBoons: state.sealedBoons, allBoons: [] });
+
+    window.eventBus.emit('notification', {
+
+      message: '\u{1F512} 祝福\u300C' + boonId + '\u300D被重新封印\uFF01',
+
+      type: 'warning',
+
+    });
+
+  }
+
+
 
   /** 解封下一个祝福 */
 
@@ -3339,17 +3471,96 @@ class GameEngine {
 
     const state = this._bossState;
 
-    if (state.unsealOrder.length === 0) return;
+    if (state.sealedBoons.length === 0) return;
 
-    const boonId = state.unsealOrder.shift();
+    // 如果当前已有临时解封的祝福，直接替换（不触发中间的全封印事件，避免闪烁）
 
-    state.sealedBoons = state.sealedBoons.filter(id => id !== boonId);
+    if (state.tempUnsealedBoon) {
 
-    window.eventBus.emit('boss:boon-unsealed', { boonId });
+      // 将旧祝福放回封印列表（不触发事件）
+
+      state.sealedBoons.push(state.tempUnsealedBoon);
+
+      state.tempUnsealedBoon = null;
+
+      state.tempUnsealExpireAt = 0;
+
+      state.tempUnsealBoonObj = null;
+
+    }
+
+    // 随机选择一个祝福解封
+
+    const randomIndex = Math.floor(Math.random() * state.sealedBoons.length);
+
+    const boonId = state.sealedBoons[randomIndex];
+
+    state.sealedBoons.splice(randomIndex, 1);
+
+    // 记录临时解封状态
+
+    state.tempUnsealedBoon = boonId;
+
+    const unsealDuration = this._currentBossConfig?.mechanics?.unsealDuration || 10000;
+
+    state.tempUnsealExpireAt = Date.now() + unsealDuration;
+
+    // 解封祝福：动态增加目标分
+
+    const mech = this._currentBossConfig?.mechanics;
+
+    const percent = mech?.scorePerBoonPercent || 17;
+
+    const increase = Math.floor(this.state.targetScore * percent / 100);
+
+    this.state.targetScore += increase;
+
+    window.eventBus.emit('score:updated', { score: this.state.score, targetScore: this.state.targetScore });
+
+    // 应用该祝福的效果到发射器
+
+    if (this.boonSystem && this.state.emitters) {
+
+      // 先还原基础修饰器（cooldownMultiplier 从 0 恢复到原始值），再应用祝福效果
+
+      if (this.state.emitterBaseModifiers) {
+
+        for (let i = 0; i < this.state.emitters.length; i++) {
+
+          const emitter = this.state.emitters[i];
+
+          const base = this.state.emitterBaseModifiers[i];
+
+          if (base) {
+
+            Object.assign(emitter.modifiers, JSON.parse(JSON.stringify(base)));
+
+          }
+
+        }
+
+      }
+
+      const boonObj = this.boonSystem.boons.find(b => b.id === boonId);
+
+      if (boonObj && boonObj.apply && boonObj.category === 'production') {
+
+        console.log('[DEBUG] 临时解封祝福，应用效果:', boonId);
+
+        boonObj.apply(this.state.emitters);
+
+        state.tempUnsealBoonObj = boonObj;
+
+      }
+
+    }
+
+    console.log('[DEBUG] 临时解封祝福, boonId=', boonId, '持续', unsealDuration, 'ms');
+    window.eventBus.emit('boss:boon-unsealed', { boonId, temporary: true, duration: unsealDuration });
 
     window.eventBus.emit('notification', {
 
-      message: `🌟 一个祝福被解封了！`,
+      message: `🌟 祝福「${boonId}」被临时解封！`,
 
       type: 'info',
 
@@ -3441,7 +3652,7 @@ class GameEngine {
 
     });
 
-    window.eventBus.emit('boss:mirror-summoned', { row: target.row, col: target.col, level: maxLevel });
+    window.eventBus.emit('boss:mirror-summoned', { row: target.row, col: target.col, level: maxLevel, duration });
 
   }
 
@@ -6337,9 +6548,12 @@ class GameEngine {
       targetScore: this.state.targetScore,
 
       board: this.state.board.map((row) =>
-
-        row.map((el) => (el ? el.serialize() : null))
-
+        row.map((el) => {
+          if (!el) return null;
+          // 兼容普通对象（如镜像元素），没有 serialize 方法时直接序列化基本字段
+          if (typeof el.serialize === 'function') return el.serialize();
+          return { typeId: el.typeId, level: el.level, gridRow: el.gridRow, gridCol: el.gridCol, isMirror: !!el.isMirror };
+        })
       ),
 
       emitters: this.state.emitters.map((e) => e.serialize()),

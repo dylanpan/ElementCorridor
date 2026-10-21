@@ -569,18 +569,20 @@ const BOSS_CONFIGS = [
     name: '创世之灵',
     icon: '🌟',
     floor: 15,
-    description: '所有祝福失效，但棋盘扩大至最大，发射器无冷却',
+    description: '所有祝福失效，但棋盘扩大至最大',
     targetScoreMultiplier: 3.0,
     specialRule: 'nullify_boons',
     mechanics: {
       /** 祝福解封间隔(ms) */
-      unsealInterval: 30000,
+      unsealInterval: 17000,
+      /** 祝福临时解封持续时间(ms) */
+      unsealDuration: 13500,
       /** 镜像召唤间隔(ms) */
-      mirrorInterval: 20000,
+      mirrorInterval: 12000,
       /** 镜像存在时间(ms) */
-      mirrorDuration: 6000,
+      mirrorDuration: 10000,
       /** 每个祝福增加的目标分百分比 */
-      scorePerBoonPercent: 15,
+      scorePerBoonPercent: 18,
     },
   },
 ];

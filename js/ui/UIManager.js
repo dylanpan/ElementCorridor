@@ -225,8 +225,15 @@ class UIManager {
     window.eventBus.on('boss:mirror-summoned', (data) => {
       this._onBossMirrorSummoned(data);
     });
+    window.eventBus.on('boss:mirror-expired', (data) => {
+      this._onBossMirrorExpired(data);
+    });
     window.eventBus.on('boss:boon-unsealed', (data) => {
       this._onBossBoonUnsealed(data);
+    });
+    window.eventBus.on('boss:boon-sealed', (data) => {
+      console.log('[DEBUG UI] 收到 boss:boon-sealed 事件, data=', JSON.stringify(data));
+      this._onBossBoonSealed(data);
     });
     window.eventBus.on('boss:victory', (data) => {
       this._onBossVictory(data);
@@ -1793,7 +1800,7 @@ class UIManager {
           <div class="boss-skill-card">
             <div class="boss-skill-header"><span class="boss-skill-icon">🌟</span><span class="boss-skill-title">创世之灵 · 封印</span></div>
             <div class="boss-skill-body">
-              <div class="boss-skill-item">🛡 封印：所有祝福失效，但棋盘扩大至最大，发射器无冷却</div>
+              <div class="boss-skill-item">🛡 封印：所有祝福失效，但棋盘扩大至最大</div>
               <div class="boss-skill-item">🔓 解封：每 ${(m.unsealInterval / 1000).toFixed(0)} 秒解封一个祝福</div>
               <div class="boss-skill-item">👻 镜像：每 ${(m.mirrorInterval / 1000).toFixed(0)} 秒召唤镜像，持续 ${(m.mirrorDuration / 1000).toFixed(0)} 秒</div>
             </div>
@@ -2037,13 +2044,26 @@ class UIManager {
     if (!cellEl) return;
 
     cellEl.classList.add('cell-mirror');
-    setTimeout(() => {
-      cellEl.classList.remove('cell-mirror');
-    }, 2500);
   }
 
-  /** 创世之灵：祝福解封 */
-  _onBossBoonUnsealed() {
+  /** 创世之灵：镜像过期 */
+  _onBossMirrorExpired(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+
+    const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
+    if (!cellEl) return;
+
+    cellEl.classList.remove('cell-mirror');
+  }
+
+    /** 创世之灵：祝福解封（增强版） */
+  _onBossBoonUnsealed(data) {
+    console.log('[DEBUG UI] _onBossBoonUnsealed 执行, data=', JSON.stringify(data));
+    // 先触发祝福区域重新渲染，更新封印状态
+    window.eventBus.emit('rogue:boons-updated');
+
+    // 全屏金色闪光
     const flash = document.createElement('div');
     flash.className = 'boon-unseal-flash';
     document.body.appendChild(flash);
@@ -2051,11 +2071,64 @@ class UIManager {
     flash.classList.add('show');
     setTimeout(() => {
       flash.classList.remove('show');
-      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 500);
-    }, 1200);
+      setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 450);
+    }, 1350);
+
+    // 在对应祝福图标上播放解封动画（重新渲染后通过 data-boon-id 精确查找）
+    if (data && data.boonId) {
+      setTimeout(() => {
+        const boonArea = document.getElementById('board-boon-area');
+        if (boonArea) {
+          const icon = boonArea.querySelector(`.rogue-boon-icon[data-boon-id="${data.boonId}"]`);
+          if (icon) {
+            icon.classList.add('rogue-boon-unsealing');
+            setTimeout(() => {
+              icon.classList.remove('rogue-boon-sealed', 'rogue-boon-unsealing');
+              window.eventBus.emit('rogue:boons-updated');
+            }, 850);
+          }
+        }
+      }, 500);
+    }
   }
 
-  /** Boss 胜利 */
+    _onBossBoonSealed(data) {
+    console.log('[DEBUG UI] _onBossBoonSealed 执行, data=', JSON.stringify(data));
+    // 先触发祝福区域重新渲染，应用封印样式
+    window.eventBus.emit('rogue:boons-updated');
+
+    // 全屏暗色闪烁（封印降临）
+    const sealFlash = document.createElement('div');
+    sealFlash.className = 'boon-seal-flash';
+    document.body.appendChild(sealFlash);
+    void sealFlash.offsetWidth;
+    sealFlash.classList.add('show');
+    setTimeout(() => {
+      sealFlash.classList.remove('show');
+      setTimeout(() => { if (sealFlash.parentNode) sealFlash.parentNode.removeChild(sealFlash); }, 520);
+    }, 1280);
+
+    // 在祝福区域添加锁链动画
+    setTimeout(() => {
+      const boonArea = document.getElementById('board-boon-area');
+      if (boonArea) {
+        const chainEffect = document.createElement('div');
+        chainEffect.className = 'boon-seal-chain-effect';
+        boonArea.appendChild(chainEffect);
+        setTimeout(() => {
+          if (chainEffect.parentNode) chainEffect.parentNode.removeChild(chainEffect);
+        }, 1480);
+      }
+    }, 280);
+
+    // 通知：祝福已被封印
+    if (data && data.sealedBoons && data.sealedBoons.length > 0) {
+      window.eventBus.emit('notification', {
+        message: '🔒 创世之灵封印了 ' + data.sealedBoons.length + ' 个祝福！',
+        type: 'warning',
+      });
+    }
+  }/** Boss 胜利 */
   _onBossVictory(data) {
     // 移除 Boss HUD
     const hud = document.getElementById('boss-hud');
