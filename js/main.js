@@ -79,21 +79,12 @@
     const modalBtn = document.getElementById('modal-btn');
 
     overlay.style.display = 'flex';
-    modalTitle.textContent = '🧪 元素合成';
+    modalTitle.textContent = '🌿 灵素回廊';
     modalBody.innerHTML = `
       <div style="text-align:center; padding:10px 0;">
-        <p style="color:#aaa; margin-bottom:20px;">选择游戏模式</p>
+        <p style="color:#aaa; margin-bottom:20px;">准备好开始冒险了吗？</p>
         <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
-          <button id="menu-classic-btn" class="menu-mode-btn" style="
-            background:linear-gradient(135deg,#4a90d9,#357abd); color:#fff;
-            border:none; border-radius:12px; padding:18px 28px; cursor:pointer;
-            font-size:16px; min-width:160px; transition:all 0.3s;
-            box-shadow:0 4px 15px rgba(74,144,217,0.3);
-          " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
-            <div style="font-size:32px; margin-bottom:6px;">🎮</div>
-            <div style="font-weight:bold;">经典模式</div>
-            <div style="font-size:12px; opacity:0.8; margin-top:4px;">三关挑战 · 新手入门</div>
-          </button>
+
           <button id="menu-rogue-btn" class="menu-mode-btn" style="
             background:linear-gradient(135deg,#ff9800,#e65100); color:#fff;
             border:none; border-radius:12px; padding:18px 24px; cursor:pointer;
@@ -101,7 +92,7 @@
             box-shadow:0 4px 15px rgba(255,152,0,0.3);
           " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
             <div style="font-size:32px; margin-bottom:6px;">⚔</div>
-            <div style="font-weight:bold;">肉鸽模式</div>
+            <div style="font-weight:bold;">开始游戏</div>
             <div style="font-size:12px; opacity:0.8; margin-top:4px;">爬塔冒险 · 祝福Build</div>
           </button>
         </div>
@@ -123,54 +114,16 @@
 
     // 绑定菜单事件（延迟确保DOM渲染完成）
     setTimeout(() => {
-      const classicBtn = document.getElementById('menu-classic-btn');
       const rogueBtn = document.getElementById('menu-rogue-btn');
       const metaBtn = document.getElementById('menu-meta-btn');
       const bestiaryBtn = document.getElementById('menu-bestiary-btn');
 
-      if (classicBtn) classicBtn.onclick = startClassicMode;
       if (rogueBtn) rogueBtn.onclick = startRogueMode;
       if (metaBtn) metaBtn.onclick = showTalentTree;
       if (bestiaryBtn) bestiaryBtn.onclick = showBestiary;
     }, 50);
   }
 
-  /** 启动经典模式 */
-  function startClassicMode() {
-    hideMenuOverlay();
-    gameEngine.isRogueMode = false;
-    gameEngine.rogueSystem = null;
-    gameEngine.boonSystem = null;
-
-    // 显示经典模式的导航栏元素
-    document.querySelector('.header-right').style.display = 'flex';
-
-    // 尝试读取存档或开始新游戏
-    if (gameEngine.hasSave()) {
-      uiManager.showModal(
-        '继续游戏',
-        '检测到之前的游戏进度，是否继续？<br><small style="color:#888">选择"新游戏"将覆盖旧存档</small>'
-      );
-      uiManager.setModalButtonCallback(() => {
-        gameEngine.load();
-      });
-      const modalBtn = document.getElementById('modal-btn');
-      if (modalBtn) {
-        modalBtn.textContent = '继续游戏';
-        const modalFooter = modalBtn.parentElement;
-        const newBtn = document.createElement('button');
-        newBtn.className = 'modal-btn secondary';
-        newBtn.textContent = '新游戏';
-        newBtn.addEventListener('click', () => {
-          uiManager.hideModal();
-          gameEngine.startLevel(1);
-        });
-        modalFooter.appendChild(newBtn);
-      }
-    } else {
-      gameEngine.startLevel(1);
-    }
-  }
 
   /** 启动肉鸽模式 */
   function startRogueMode() {
