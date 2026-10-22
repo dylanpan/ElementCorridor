@@ -232,7 +232,6 @@ class UIManager {
       this._onBossBoonUnsealed(data);
     });
     window.eventBus.on('boss:boon-sealed', (data) => {
-      console.log('[DEBUG UI] 收到 boss:boon-sealed 事件, data=', JSON.stringify(data));
       this._onBossBoonSealed(data);
     });
     window.eventBus.on('boss:victory', (data) => {
@@ -2059,7 +2058,6 @@ class UIManager {
 
     /** 创世之灵：祝福解封（增强版） */
   _onBossBoonUnsealed(data) {
-    console.log('[DEBUG UI] _onBossBoonUnsealed 执行, data=', JSON.stringify(data));
     // 先触发祝福区域重新渲染，更新封印状态
     window.eventBus.emit('rogue:boons-updated');
 
@@ -2093,7 +2091,6 @@ class UIManager {
   }
 
     _onBossBoonSealed(data) {
-    console.log('[DEBUG UI] _onBossBoonSealed 执行, data=', JSON.stringify(data));
     // 先触发祝福区域重新渲染，应用封印样式
     window.eventBus.emit('rogue:boons-updated');
 

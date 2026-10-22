@@ -2353,7 +2353,6 @@ class GameEngine {
     if (bossId === 'boss_creation_spirit' && this.boonSystem) {
 
       const allBoons = this.boonSystem.getBoonSummary ? this.boonSystem.getBoonSummary() : [];
-      console.log('[DEBUG] 创世之灵封印祝福: allBoons=', JSON.stringify(allBoons));
 
       this._bossState.sealedBoons = allBoons.map(b => b.id);
 
@@ -2364,16 +2363,13 @@ class GameEngine {
       this._bossState.tempUnsealExpireAt = 0;
 
       this._bossState.tempUnsealBoonObj = null;
-      console.log('[DEBUG] 创世之灵 sealedBoons=', JSON.stringify(this._bossState.sealedBoons));
 
       // 通知 BoonSystem 哪些祝福被封印
 
       this.boonSystem.sealedBoons = this._bossState.sealedBoons;
-      console.log('[DEBUG] boonSystem.sealedBoons 已设置=', JSON.stringify(this.boonSystem.sealedBoons));
 
       // 触发封印视觉特效事件
 
-      console.log('[DEBUG] 即将触发 boss:boon-sealed 事件');
       window.eventBus.emit('boss:boon-sealed', { sealedBoons: this._bossState.sealedBoons, allBoons: allBoons });
 
       // 延迟封印：监听祝福加载完成，确保所有祝福都被封印
@@ -2382,7 +2378,6 @@ class GameEngine {
           if (this._bossState && this._bossState.isActive && this.boonSystem) {
             const laterBoons = this.boonSystem.getBoonSummary ? this.boonSystem.getBoonSummary() : [];
             if (laterBoons.length > 0 && this._bossState.sealedBoons.length === 0) {
-              console.log('[DEBUG] 延迟封印祝福: laterBoons=', JSON.stringify(laterBoons));
               this._bossState.sealedBoons = laterBoons.map(b => b.id);
               this._bossState.unsealOrder = [...this._bossState.sealedBoons];
               this.boonSystem.sealedBoons = this._bossState.sealedBoons;
@@ -3413,7 +3408,6 @@ class GameEngine {
 
     const boonId = state.tempUnsealedBoon;
 
-    console.log('[DEBUG] 重新封印祝福:', boonId);
 
     // 将该祝福放回封印列表
 
@@ -3545,7 +3539,6 @@ class GameEngine {
 
       if (boonObj && boonObj.apply && boonObj.category === 'production') {
 
-        console.log('[DEBUG] 临时解封祝福，应用效果:', boonId);
 
         boonObj.apply(this.state.emitters);
 
@@ -3555,7 +3548,6 @@ class GameEngine {
 
     }
 
-    console.log('[DEBUG] 临时解封祝福, boonId=', boonId, '持续', unsealDuration, 'ms');
     window.eventBus.emit('boss:boon-unsealed', { boonId, temporary: true, duration: unsealDuration });
 
     window.eventBus.emit('notification', {

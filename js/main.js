@@ -472,7 +472,6 @@
       const boons = boonSystem.getBoonSummary();
       const curses = boonSystem.getCurseSummary();
       const sealedIds = boonSystem.sealedBoons || [];
-      console.log('[DEBUG main] updateRogueStatusBar: sealedIds=', JSON.stringify(sealedIds), 'boons=', JSON.stringify(boons));
       let html = '';
       for (const b of boons) {
         const isSealed = sealedIds.includes(b.id);
@@ -585,7 +584,6 @@
     });
 
     window.eventBus.on('rogue:boons-updated', () => {
-      console.log('[DEBUG main] 收到 rogue:boons-updated 事件');
       updateRogueStatusBar();
     });
 
