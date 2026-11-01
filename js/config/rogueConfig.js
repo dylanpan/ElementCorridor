@@ -59,10 +59,12 @@ const BOON_POOL = [
     icon: '🔥',
     rarity: 'common',
     category: 'production',
-    description: '火焰发射器冷却减半',
+    description: '解锁火焰元素的产出能力，同时无属性元素停止产出',
     flavor: '"与火焰共鸣"',
-    apply: (emitters) => {
-      emitters.filter(e => e.elementType === 'fire').forEach(e => { e.modifiers.cooldownMultiplier *= 0.5; });
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleAffinityBoon('boon_fire_affinity');
+      }
     },
   },
   {
@@ -71,10 +73,12 @@ const BOON_POOL = [
     icon: '💧',
     rarity: 'common',
     category: 'production',
-    description: '水滴发射器冷却减半',
+    description: '解锁水滴元素的产出能力，同时无属性元素停止产出',
     flavor: '"与水波共舞"',
-    apply: (emitters) => {
-      emitters.filter(e => e.elementType === 'water').forEach(e => { e.modifiers.cooldownMultiplier *= 0.5; });
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleAffinityBoon('boon_water_affinity');
+      }
     },
   },
   {
@@ -83,10 +87,12 @@ const BOON_POOL = [
     icon: '🪨',
     rarity: 'common',
     category: 'production',
-    description: '土块发射器冷却减半',
+    description: '解锁土块元素的产出能力，同时无属性元素停止产出',
     flavor: '"与大地的羁绊"',
-    apply: (emitters) => {
-      emitters.filter(e => e.elementType === 'earth').forEach(e => { e.modifiers.cooldownMultiplier *= 0.5; });
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleAffinityBoon('boon_earth_affinity');
+      }
     },
   },
   {
@@ -95,10 +101,12 @@ const BOON_POOL = [
     icon: '🌪',
     rarity: 'common',
     category: 'production',
-    description: '微风发射器冷却减半',
+    description: '解锁微风元素的产出能力，同时无属性元素停止产出',
     flavor: '"随风而行"',
-    apply: (emitters) => {
-      emitters.filter(e => e.elementType === 'air').forEach(e => { e.modifiers.cooldownMultiplier *= 0.5; });
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleAffinityBoon('boon_air_affinity');
+      }
     },
   },
   {
@@ -107,10 +115,12 @@ const BOON_POOL = [
     icon: '🌿',
     rarity: 'common',
     category: 'production',
-    description: '植物发射器冷却减半',
+    description: '解锁植物元素的产出能力，同时无属性元素停止产出',
     flavor: '"自然的馈赠"',
-    apply: (emitters) => {
-      emitters.filter(e => e.elementType === 'plant').forEach(e => { e.modifiers.cooldownMultiplier *= 0.5; });
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleAffinityBoon('boon_plant_affinity');
+      }
     },
   },
   {
@@ -322,6 +332,36 @@ const BOON_POOL = [
     description: '解锁怒气大招「超级合成」：随机将一对相邻同等级元素合成高两级',
     flavor: '"化不可能为可能"',
     apply: () => {},
+  },
+
+  // ---- 新增：多元素产出祝福 ----
+  {
+    id: 'boon_split_flow',
+    name: '灵素分流',
+    icon: '🔀',
+    rarity: 'rare',
+    category: 'production',
+    description: '点击发射器时产出 2 种不同属性元素（需已解锁 ≥ 2 种属性元素）',
+    flavor: '"一生二，二生三"',
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleMultiSpawnBoon('boon_split_flow');
+      }
+    },
+  },
+  {
+    id: 'boon_myriad_source',
+    name: '万象之源',
+    icon: '🌌',
+    rarity: 'epic',
+    category: 'production',
+    description: '点击发射器时产出 3 种不同属性元素（需已解锁 ≥ 3 种属性元素）',
+    flavor: '"万物归一，一化万象"',
+    apply: (emitters, boonSystem) => {
+      if (boonSystem) {
+        boonSystem.handleMultiSpawnBoon('boon_myriad_source');
+      }
+    },
   },
 ];
 
@@ -589,8 +629,8 @@ const BOSS_CONFIGS = [
 
 // ==================== 层数生成配置 ====================
 const FLOOR_GENERATOR = {
-  maxFloor: 12,
-  nodesPerFloor: [2, 2, 3, 2, 3, 3, 2, 3, 3, 3, 3, 3],
+  maxFloor: 15,
+  nodesPerFloor: [2, 2, 3, 2, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3],
   nodeTypes: ['combat', 'elite', 'boon', 'shop', 'event', 'rest'],
   
   /** 根据层数生成节点序列 */

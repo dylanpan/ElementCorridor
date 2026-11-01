@@ -270,6 +270,7 @@ class BoardRenderer {
     this.rows = rows;
     this.selectedCell = null;
     this._animatingCells.clear();
+    this.frozenRows.clear();
     this.container.innerHTML = '';
     this.cells = [];
 

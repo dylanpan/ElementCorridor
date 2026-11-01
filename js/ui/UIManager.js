@@ -39,6 +39,7 @@ class UIManager {
       'refresh-orders-btn', 'current-level',
       'board-combo-display', 'board-combo-count-text',
       'board-combo-multiplier-text',
+      'item-bar',
     ];
     for (const id of ids) {
       this.elements[id] = document.getElementById(id);
@@ -80,10 +81,43 @@ class UIManager {
 
     window.eventBus.on('combo:milestone', (data) => {
       this.showMilestoneEffect(data.milestone, data.isFirstTime);
+      // 连击里程碑额外横幅
+      if (data.milestone >= 5) {
+        const labels = { 5: '🔥 5连击 · 烈焰', 10: '⚡ 10连击 · 雷霆', 20: '🌀 20连击 · 风暴' };
+        const label = labels[data.milestone] || `🔥 ${data.milestone}连击`;
+        this._enqueueBanner(label, 'x' + (data.multiplier || ''), 'combo-banner', 2200);
+      }
     });
 
     window.eventBus.on('orders:updated', (orders) => {
       this.renderOrders(orders);
+      // 渲染后重新应用冻结效果（防止 panel.innerHTML 清空覆盖层）
+      if (window.__gameEngine && window.__gameEngine.itemSystem &&
+          window.__gameEngine.itemSystem._freezeEndTime > Date.now()) {
+        this._reapplyFreezeEffects();
+      }
+    });
+
+    // 订单倒计时实时更新
+    window.eventBus.on('order-timers:updated', (data) => {
+      for (const timerData of data.orders) {
+        const container = document.querySelector('.order-timer-bar-container[data-order-id="' + timerData.id + '"]');
+        if (!container) continue;
+        const bar = container.querySelector('.order-timer-bar');
+        const text = container.querySelector('.order-timer-text');
+        if (!bar || !text) continue;
+
+        const progress = timerData.timeLimit > 0
+          ? timerData.remainingMs / timerData.timeLimit : 0;
+        const sec = Math.ceil(timerData.remainingMs / 1000);
+        const urgent = sec <= 5;
+
+        // 使用 ::after 伪元素宽度控制进度条
+        bar.style.setProperty('--progress', (progress * 100) + '%');
+        bar.className = 'order-timer-bar' + (urgent ? ' urgent' : '');
+        text.textContent = sec + 's';
+        text.className = 'order-timer-text' + (urgent ? ' urgent' : '');
+      }
     });
 
     window.eventBus.on('emitters:updated', (emitters) => {
@@ -97,6 +131,10 @@ class UIManager {
     window.eventBus.on('game:over', (data) => {
       // 仅处理肉鸽模式的 game:over（由 RogueUIManager 接管）
       // 经典模式已由 rating:complete 事件通过评级面板处理
+      // 生存模式失败：显示失败弹窗
+      if (data.survived === false) {
+        this.showFailureModal(data);
+      }
     });
 
     window.eventBus.on('game:failed', (data) => {
@@ -108,8 +146,36 @@ class UIManager {
       });
     });
 
+    window.eventBus.on('items:updated', (data) => {
+      this._renderItemBar(data.items);
+    });
+
+    window.eventBus.on('item:granted', (data) => {
+      this._renderItemBar(data.items);
+    });
+
     window.eventBus.on('notification', (data) => {
       this.showNotification(data.message, data.type);
+    });
+
+    // 时间停滞视觉特效
+    window.eventBus.on('freeze:activated', (data) => {
+      this._showFreezeEffect(data.until);
+    });
+    window.eventBus.on('freeze:deactivated', () => {
+      this._hideFreezeEffect();
+    });
+
+    // 道具使用事件
+    window.eventBus.on('item:use', (itemId) => {
+      if (window.__gameEngine && window.__gameEngine.itemSystem) {
+        window.__gameEngine.itemSystem.useItem(itemId);
+      }
+    });
+
+    // 双倍积分视觉特效
+    window.eventBus.on('item:double-score-effect', (data) => {
+      this._showDoubleScoreEffect(data.reward, data.orderId, data.cardRect);
     });
 
     // === 波次系统事件 ===
@@ -257,60 +323,117 @@ class UIManager {
     panel.innerHTML = '';
     this.emitterButtons = [];
 
-    for (const emitter of emitters) {
-      const btn = document.createElement('button');
-      btn.className = 'emitter-btn';
-      btn.dataset.emitterId = emitter.id;
+    // 单一发射器模式：只取第一个发射器
+    const emitter = emitters[0];
+    if (!emitter) return;
 
-      // 图标
-      const iconSpan = document.createElement('span');
-      iconSpan.className = 'emitter-icon';
-      iconSpan.textContent = emitter.icon;
-      btn.appendChild(iconSpan);
+    const btn = document.createElement('button');
+    btn.className = 'unified-emitter-btn';
+    btn.dataset.emitterId = emitter.id;
 
-      // 名称
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'emitter-name';
-      nameSpan.textContent = emitter.name;
-      btn.appendChild(nameSpan);
+    // 图标
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'emitter-icon';
+    iconSpan.textContent = '✨';
+    btn.appendChild(iconSpan);
 
-      // 冷却进度条（整个按钮作为背景，从左到右填充）
-      const cooldownBar = document.createElement('div');
-      cooldownBar.className = 'emitter-cooldown-bar';
-      cooldownBar.style.width = '0%';
-      btn.appendChild(cooldownBar);
+    // 名称
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'emitter-name';
+    nameSpan.textContent = '灵素之源';
+    btn.appendChild(nameSpan);
 
-      // 倒计时数字文本
-      const timerText = document.createElement('span');
-      timerText.className = 'cooldown-timer-text';
-      timerText.textContent = '';
-      btn.appendChild(timerText);
+    // 冷却进度条
+    const cooldownBar = document.createElement('div');
+    cooldownBar.className = 'emitter-cooldown-bar';
+    cooldownBar.style.width = '0%';
+    btn.appendChild(cooldownBar);
 
-      // 点击事件
-      btn.addEventListener('click', () => {
-        if (onClick) onClick(emitter.id);
-      });
+    // 倒计时数字文本
+    const timerText = document.createElement('span');
+    timerText.className = 'cooldown-timer-text';
+    timerText.textContent = '';
+    btn.appendChild(timerText);
 
-      panel.appendChild(btn);
-      this.emitterButtons.push({
-        element: btn,
-        emitterId: emitter.id,
-        cooldownFill: null,
-        cooldownBar: cooldownBar,
-        iconEl: iconSpan,
-        timerText: timerText,
-      });
-    }
+    // 点击事件
+    btn.addEventListener('click', () => {
+      if (onClick) onClick(emitter.id);
+    });
+
+    panel.appendChild(btn);
+    this.emitterButtons.push({
+      element: btn,
+      emitterId: emitter.id,
+      cooldownFill: null,
+      cooldownBar: cooldownBar,
+      iconEl: iconSpan,
+      timerText: timerText,
+    });
+
+    // 渲染元素池展示
+    this._renderElementPool();
   }
 
   /**
    * 更新发射器冷却状态
    */
+  /**
+   * 渲染元素池展示
+   * 显示当前可产出的元素类型及概率
+   */
+  _renderElementPool() {
+    const poolContainer = document.getElementById('element-pool');
+    if (!poolContainer) return;
+
+    if (!this.gameEngine || !this.gameEngine.boonSystem) {
+      poolContainer.innerHTML = '';
+      return;
+    }
+
+    const context = this.gameEngine.boonSystem.getSpawnContext();
+    if (!context) {
+      poolContainer.innerHTML = '<span class="pool-empty">暂无可用元素</span>';
+      return;
+    }
+
+    const { availableTypes, probabilities } = context;
+
+    poolContainer.innerHTML = availableTypes.map(type => {
+      const def = ELEMENT_TYPES[type];
+      if (!def) return '';
+      const prob = ((probabilities[type] || 0) * 100).toFixed(0);
+      const isBasic = type === 'basic';
+      return `
+        <span class="pool-element ${isBasic ? 'pool-basic' : ''}" data-type="${type}">
+          <span class="pool-icon">${def.icon}</span>
+          <span class="pool-name">${def.name}</span>
+          <span class="pool-prob">${prob}%</span>
+        </span>
+      `;
+    }).join('');
+  }
+
   updateEmitters(emitters) {
     const now = Date.now();
+    const isStormActive = window.__gameEngine && window.__gameEngine.itemSystem &&
+      window.__gameEngine.itemSystem._stormEndTime > now;
     for (const btnData of this.emitterButtons) {
       const emitter = emitters.find((e) => e.id === btnData.emitterId);
       if (!emitter) continue;
+
+      // 元素风暴：强制按钮就绪
+      if (isStormActive) {
+        btnData.cooldownBar.style.width = '0%';
+        btnData.cooldownBar.style.background = 'linear-gradient(90deg, #66bb6a, #43a047)';
+        if (btnData.timerText) {
+          btnData.timerText.textContent = '';
+          btnData.timerText.style.display = 'none';
+        }
+        btnData.element.classList.remove('on-cooldown');
+        btnData.element.disabled = false;
+        btnData.element.classList.add('emitter-btn-ready');
+        continue;
+      }
 
       const progress = emitter.getCooldownProgress(now);
 
@@ -425,14 +548,29 @@ class UIManager {
       const typeConfig = ELEMENT_TYPES[order.elementType];
       const levelConfig = ELEMENT_LEVELS[order.level - 1];
 
+      const qualityCfg = OrderSystem.QUALITY_CONFIG[order.quality] || OrderSystem.QUALITY_CONFIG.common;
       const card = document.createElement('div');
-      card.className = `order-card order-${order.difficulty}`;
+      card.className = `order-card order-${order.difficulty} order-quality-${order.quality}`;
       card.dataset.orderId = order.id;
+      card.style.borderColor = qualityCfg.color;
+      card.style.boxShadow = `0 0 8px ${qualityCfg.color}40`;
+
+      // 品质标签（顶部）
+      const qualityBadge = document.createElement('div');
+      qualityBadge.className = 'order-quality-badge';
+      qualityBadge.textContent = `${qualityCfg.icon} ${qualityCfg.label}`;
+      qualityBadge.style.color = qualityCfg.color;
+      qualityBadge.style.borderColor = qualityCfg.color;
+      card.appendChild(qualityBadge);
+
+      // 内容行：icon + 信息
+      const contentRow = document.createElement('div');
+      contentRow.className = 'order-content-row';
 
       const iconSpan = document.createElement('span');
       iconSpan.className = 'order-icon';
       iconSpan.textContent = typeConfig?.icon || '❓';
-      card.appendChild(iconSpan);
+      contentRow.appendChild(iconSpan);
 
       const infoDiv = document.createElement('div');
       infoDiv.className = 'order-info';
@@ -444,18 +582,40 @@ class UIManager {
 
       const rewardP = document.createElement('div');
       rewardP.className = 'order-reward';
-      rewardP.textContent = `+${order.reward}分`;
+      const qCfg = OrderSystem.QUALITY_CONFIG[order.quality] || OrderSystem.QUALITY_CONFIG.common;
+      const multStr = qCfg.rewardMultiplier.toFixed(1);
+      rewardP.innerHTML = `+${order.reward}分 <span class="reward-multiplier" style="color:${qCfg.color}">x${multStr}</span>`;
       infoDiv.appendChild(rewardP);
 
-      card.appendChild(infoDiv);
+      contentRow.appendChild(infoDiv);
 
+      const diffLabels = { easy: '简单', medium: '普通', hard: '困难', rare: '稀有' };
       const diffSpan = document.createElement('span');
       diffSpan.className = 'order-difficulty';
-      const diffLabels = { easy: '简单', medium: '普通', hard: '困难', rare: '稀有' };
       diffSpan.textContent = diffLabels[order.difficulty] || order.difficulty;
       card.appendChild(diffSpan);
 
-      // 加急订单：添加倒计时进度条
+      card.appendChild(contentRow);
+
+      // 倒计时进度条容器（带移动动画）
+      const timerContainer = document.createElement('div');
+      timerContainer.className = 'order-timer-bar-container';
+      timerContainer.dataset.orderId = order.id;
+
+      const timerBar = document.createElement('div');
+      timerBar.className = 'order-timer-bar';
+      timerBar.dataset.orderId = order.id;
+      timerContainer.appendChild(timerBar);
+
+      const timerText = document.createElement('span');
+      timerText.className = 'order-timer-text';
+      timerText.dataset.orderId = order.id;
+      timerText.textContent = '';
+      timerContainer.appendChild(timerText);
+
+      card.appendChild(timerContainer);
+
+      // 加急订单：添加加急进度条
       if (order.isRush) {
         const rushBarContainer = document.createElement('div');
         rushBarContainer.className = 'rush-order-bar-container';
@@ -499,11 +659,28 @@ class UIManager {
    * 合成时显示连击横幅，连击为0时不显示
    */
   updateCombo(count, multiplier) {
+    // 更新棋盘连击显示
+    const comboDisplay = this.elements['board-combo-display'];
+    const countText = this.elements['board-combo-count-text'];
+    const multiText = this.elements['board-combo-multiplier-text'];
+    if (!comboDisplay) return;
+
     if (count >= 2) {
-      // 连击≥2时显示横幅
-      this._enqueueBanner(`🔥 ${count}连击`, `x${multiplier.toFixed(1)}`, 'combo-banner', 1200);
+      // 连击≥2时显示横幅和棋盘连击指示器
+      this._enqueueBanner(`🔥 ${count}连击`, `x${multiplier.toFixed(1)}`, 'combo-banner', 1400);
+      // 更新棋盘连击显示
+      comboDisplay.style.display = 'inline-flex';
+      countText.textContent = `🔥 ${count}连击`;
+      multiText.textContent = `x${multiplier.toFixed(1)}`;
+      // 移除旧的动画类并重新添加跳动效果
+      comboDisplay.classList.remove('combo-jump', 'combo-break');
+      void comboDisplay.offsetWidth; // 强制回流
+      comboDisplay.classList.add('combo-jump');
+    } else if (count === 0) {
+      // 连击归零时隐藏
+      comboDisplay.style.display = 'none';
+      comboDisplay.classList.remove('combo-jump', 'combo-break');
     }
-    // count=0或1时不显示横幅（首次合成不弹）
   }
 
   /**
@@ -511,7 +688,18 @@ class UIManager {
    * 连击中断时触发
    */
   _showComboBreak() {
-    this._enqueueBanner('💥 Combo Break!', '', 'combo-break-banner', 1000);
+    this._enqueueBanner('💥 Combo Break!', '', 'combo-break-banner', 1200);
+    // 棋盘连击显示闪烁红色
+    const comboDisplay = this.elements['board-combo-display'];
+    if (comboDisplay && comboDisplay.style.display !== 'none') {
+      comboDisplay.classList.remove('combo-jump', 'combo-break');
+      void comboDisplay.offsetWidth;
+      comboDisplay.classList.add('combo-break');
+      // 0.7秒后移除闪烁效果
+      setTimeout(() => {
+        comboDisplay.classList.remove('combo-break');
+      }, 750);
+    }
   }
 
   /**
@@ -596,6 +784,143 @@ class UIManager {
     }
   }
 
+  /** 显示时间停滞冻结特效 */
+  _showFreezeEffect(until) {
+    // 移除旧的冻结指示器
+    this._hideFreezeEffect();
+    
+    // 创建冻结指示器（定位在订单面板前方）
+    const indicator = document.createElement('div');
+    indicator.id = 'freeze-indicator';
+    indicator.style.cssText = 'background:rgba(33,150,243,0.18);border:2px solid rgba(33,150,243,0.45);border-radius:10px;padding:8px 20px;color:#64B5F6;font-size:16px;font-weight:bold;text-shadow:0 0 20px rgba(33,150,243,0.5);animation:pulse-blue 1s ease-in-out infinite;display:inline-flex;align-items:center;gap:8px;margin-bottom:8px;';
+    indicator.innerHTML = '<span style="font-size:22px;">⏸</span> 时间冻结 <span id="freeze-countdown"></span>';
+    
+    // 插入到订单面板前方
+    const ordersSection = document.querySelector('.panel-section.orders-section');
+    if (ordersSection) {
+      ordersSection.insertBefore(indicator, ordersSection.firstChild);
+    } else {
+      document.body.appendChild(indicator);
+    }
+    
+    // 订单面板冻结覆盖层
+    const ordersPanel = document.getElementById('orders-panel');
+    if (ordersPanel) {
+      const panelOverlay = document.createElement('div');
+      panelOverlay.id = 'freeze-panel-overlay';
+      panelOverlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(144,202,249,0.08);border-radius:8px;pointer-events:none;z-index:10;box-shadow:inset 0 0 30px rgba(33,150,243,0.15);';
+      ordersPanel.style.position = 'relative';
+      ordersPanel.appendChild(panelOverlay);
+    }
+    
+    // 订单卡片添加冻结样式
+    document.querySelectorAll('.order-card').forEach(function(card) {
+      card.classList.add('order-frozen');
+    });
+    
+    // 更新倒计时
+    this._freezeInterval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      const cd = document.getElementById('freeze-countdown');
+      if (cd) cd.textContent = remaining + 's';
+      if (remaining <= 0) this._hideFreezeEffect();
+    }, 500);
+    
+    // 添加脉冲动画
+    if (!document.getElementById('freeze-pulse-style')) {
+      const style = document.createElement('style');
+      style.id = 'freeze-pulse-style';
+      style.textContent = '@keyframes pulse-blue{0%,100%{box-shadow:0 0 10px rgba(33,150,243,0.3);}50%{box-shadow:0 0 30px rgba(33,150,243,0.7);}}';
+      document.head.appendChild(style);
+    }
+  }
+  
+  /** 重新应用冻结效果（renderOrders 清空 panel 后调用） */
+  _reapplyFreezeEffects() {
+    // 重新添加订单面板冻结覆盖层
+    const ordersPanel = document.getElementById('orders-panel');
+    if (ordersPanel && !document.getElementById('freeze-panel-overlay')) {
+      const panelOverlay = document.createElement('div');
+      panelOverlay.id = 'freeze-panel-overlay';
+      panelOverlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(144,202,249,0.04);border-radius:8px;pointer-events:none;z-index:10;box-shadow:inset 0 0 20px rgba(33,150,243,0.1);';
+      ordersPanel.style.position = 'relative';
+      ordersPanel.appendChild(panelOverlay);
+    }
+    // 重新为订单卡片添加冻结样式
+    document.querySelectorAll('.order-card').forEach(function(card) {
+      card.classList.add('order-frozen');
+    });
+  }
+
+  /** 隐藏时间停滞冻结特效 */
+  _hideFreezeEffect() {
+    if (this._freezeInterval) {
+      clearInterval(this._freezeInterval);
+      this._freezeInterval = null;
+    }
+    const indicator = document.getElementById('freeze-indicator');
+    if (indicator) indicator.remove();
+    const panelOverlay = document.getElementById('freeze-panel-overlay');
+    if (panelOverlay) panelOverlay.remove();
+    // 移除订单卡片冻结样式
+    document.querySelectorAll('.order-card.order-frozen').forEach(function(card) {
+      card.classList.remove('order-frozen');
+    });
+  }
+
+  /**
+   * 显示双倍积分 X2 特效
+   */
+  _showDoubleScoreEffect(reward, orderId, cardRect) {
+    // 在屏幕中央附近创建 X2 特效
+    const el = document.createElement('div');
+    el.className = 'double-score-effect';
+    el.textContent = '✖2';
+    
+    // 定位到订单卡片附近
+    let posLeft = '50%';
+    let posTop = '40%';
+    
+    if (cardRect) {
+      posLeft = (cardRect.left + cardRect.width / 2 - 46) + 'px';
+      posTop = (cardRect.top - 54) + 'px';
+    } else if (orderId) {
+      const card = document.querySelector('.order-card[data-order-id="' + orderId + '"]');
+      if (card) {
+        const rect = card.getBoundingClientRect();
+        posLeft = (rect.left + rect.width / 2 - 46) + 'px';
+        posTop = (rect.top - 54) + 'px';
+      } else {
+        // fallback: 使用订单面板位置
+        const panel = document.getElementById('orders-panel');
+        if (panel) {
+          const rect = panel.getBoundingClientRect();
+          posLeft = (rect.left + rect.width / 2 - 46) + 'px';
+          posTop = (rect.top + rect.height / 2 - 26) + 'px';
+        }
+      }
+    }
+    
+    el.style.position = 'fixed';
+    el.style.left = posLeft;
+    el.style.top = posTop;
+    document.body.appendChild(el);
+    
+    // 动画结束后移除
+    setTimeout(() => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 2000);
+  }
+
+  /**
+   * 显示双倍积分 X2 特效
+   */
+  /**
+   * 显示双倍积分 X2 特效
+   */
+  /**
+   * 显示双倍积分 X2 特效
+   */
   /**
    * 检查进度阈值并触发进度横幅
    */
@@ -761,6 +1086,45 @@ class UIManager {
   /**
    * 显示弹窗
    */
+  /**
+   * 显示生存模式失败弹窗
+   */
+  showFailureModal(data) {
+    const overlay = this.elements['game-overlay'];
+    if (!overlay) return;
+    const titleEl = this.elements['modal-title'];
+    const bodyEl = this.elements['modal-body'];
+    const modalBtn = this.elements['modal-btn'];
+    if (titleEl) titleEl.textContent = '💀 游戏结束';
+    // 隐藏底部的确定按钮（失败弹窗使用自定义按钮组）
+    if (modalBtn) modalBtn.style.display = 'none';
+    if (bodyEl) {
+      bodyEl.innerHTML = `
+        <div style="text-align:center;padding:12px 0;">
+          <div style="font-size:3rem;margin-bottom:12px;">💀</div>
+          <p style="font-size:1.1rem;color:#ef5350;font-weight:700;margin-bottom:8px;">${data.reason || '积分归零'}</p>
+          <p style="font-size:0.85rem;color:var(--text-secondary);">最终积分：<span style="color:var(--accent-gold);font-weight:700;">${data.score}</span></p>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;">
+          <button class="failure-action-btn" data-action="menu" style="padding:10px 32px;background:#666;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;">回到主菜单</button>
+          <button class="failure-action-btn" data-action="retry" style="padding:10px 32px;background:linear-gradient(135deg,#ffd700,#ff9800);color:#000;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:bold;">再来一局</button>
+        </div>
+      `;
+      bodyEl.querySelectorAll('.failure-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          overlay.style.display = 'none';
+          const action = btn.dataset.action;
+          if (action === 'menu') {
+            window.eventBus.emit('rogue:return-to-menu');
+          } else if (action === 'retry') {
+            window.eventBus.emit('rogue:start-new-run');
+          }
+        });
+      });
+    }
+    overlay.style.display = 'flex';
+  }
+
   showModal(title, bodyHtml) {
     const overlay = this.elements['game-overlay'];
     const modalTitle = this.elements['modal-title'];
@@ -1444,8 +1808,10 @@ class UIManager {
 
     // 根据是否有下一关设置按钮回调
     if (data.isRogue) {
-      // 肉鸽模式：按钮只关闭弹窗，由 game:over 事件让肉鸽系统接管后续
-      this.setModalButtonCallback(() => {});
+      // 肉鸽模式：按钮触发后续路由（由 game:over 处理器准备的 pendingRouting）
+      this.setModalButtonCallback(() => {
+        window.eventBus.emit('rogue:rating-continue');
+      });
     } else if (data.isLastLevel) {
       this.setModalButtonCallback(() => {
         window.location.reload();
@@ -2222,6 +2588,62 @@ class UIManager {
       setTimeout(() => {
         if (particle.parentNode) particle.parentNode.removeChild(particle);
       }, 700);
+    }
+  }
+
+  // ==================== 道具系统 UI ====================
+
+  /**
+   * 渲染道具栏
+   * @param {Array} items - 道具列表 [{ id, count, def: { icon, name, desc } }]
+   */
+  _renderItemBar(items) {
+    const bar = this.elements['item-bar'];
+    if (!bar) return;
+
+    bar.innerHTML = '';
+
+    if (!items || items.length === 0) {
+      bar.innerHTML = '<div class="item-bar-empty">暂无道具</div>';
+      return;
+    }
+
+    for (const item of items) {
+      if (!item.count || item.count <= 0) continue;
+      const def = item.def || {};
+      const span = document.createElement('span');
+      span.className = 'rogue-boon-icon item-icon';
+      span.dataset.itemId = item.id;
+      span.style.cursor = 'pointer';
+
+      span.innerHTML = `
+        ${def.icon || '?'}
+        <span class="item-count-badge">${item.count}</span>
+        <div class="rogue-item-tooltip">
+          <div class="rogue-tooltip-name">${def.icon || ''} ${def.name || item.id}</div>
+          <div class="rogue-tooltip-desc">${def.description || ''}</div>
+        </div>
+      `;
+
+      span.addEventListener('click', () => {
+        window.eventBus.emit('item:use', item.id);
+      });
+
+      bar.appendChild(span);
+    }
+  }
+
+  /**
+   * 道具使用反馈
+   * @param {string} itemId - 道具ID
+   */
+  _onItemUsed(itemId) {
+    const btn = this.elements['item-bar']?.querySelector(`[data-item-id="${itemId}"]`);
+    if (btn) {
+      btn.classList.add('item-btn-used');
+      setTimeout(() => {
+        btn.classList.remove('item-btn-used');
+      }, 400);
     }
   }
 }

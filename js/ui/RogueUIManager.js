@@ -12,16 +12,18 @@ class RogueUIManager {
     this.boonSystem = null;
     this.eventSystem = null;
     this.gameEngine = null;
+    this.metaProgress = null;
     this._overlayStack = [];
     this._visible = false;
   }
 
   /** 初始化 */
-  init(rogueSystem, boonSystem, eventSystem, gameEngine) {
+  init(rogueSystem, boonSystem, eventSystem, gameEngine, metaProgress) {
     this.rogueSystem = rogueSystem;
     this.boonSystem = boonSystem;
     this.eventSystem = eventSystem;
     this.gameEngine = gameEngine;
+    this.metaProgress = metaProgress || null;
 
     this._createContainer();
     this._registerEvents();

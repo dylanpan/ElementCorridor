@@ -22,9 +22,9 @@ class GameEngine {
 
       level: 1,
 
-      score: 0,
+      score: 10,
 
-      targetScore: 100,
+      targetScore: Infinity,
 
       isPlaying: false,
 
@@ -81,6 +81,27 @@ class GameEngine {
     // 已触发的连击里程碑（用于首次完整效果）
 
     this._triggeredMilestones = new Set();
+
+    // ==================== 订单提交连击状态（连击奖励系统） ====================
+
+    /** @type {{ count: number, multiplier: number, lastSubmitTime: number, timeoutId: number|null }} */
+
+    this._comboState = {
+
+      count: 0,             // 当前连击数
+
+      multiplier: 1.0,      // 当前倍率
+
+      lastSubmitTime: 0,    // 上次提交时间戳
+
+      timeoutId: null,      // 连击超时定时器
+
+    };
+
+    // 道具系统
+    this.itemSystem = new ItemSystem(this);
+    // 双倍积分倍率（由道具系统设置）
+    this._nextOrderMultiplier = 1;
 
     // ==================== 元素连锁反应状态 ====================
 
@@ -446,7 +467,7 @@ class GameEngine {
 
     /** @type {number} 本关最高连击数 */
 
-    this._highestCombo = 0;
+    this.autoPlay = null;
 
     /** @type {number} 本关最高合成等级 */
 
@@ -463,6 +484,13 @@ class GameEngine {
     // 绑定事件
 
     window.eventBus.on('ui:order-clicked', (orderId) => this._onOrderClicked(orderId));
+
+    // 监听元素转化事件（无属性元素→属性元素）
+    window.eventBus.on('element:convert-basic', (data) => {
+      if (data && data.elementType) {
+        this._convertBasicElements(data.elementType);
+      }
+    });
 
   }
 
@@ -519,6 +547,12 @@ class GameEngine {
     // 重置评分数据
 
     this._resetRatingData();
+
+    // 重置道具风暴/冻结状态（防止延续到下一关）
+    if (this.itemSystem) {
+      this.itemSystem._stormEndTime = 0;
+      this.itemSystem._freezeEndTime = 0;
+    }
 
     // 清除连击超时
 
@@ -640,6 +674,11 @@ class GameEngine {
 
     }
 
+    // 初始化元素解锁状态（单一发射器模式）
+    if (this.boonSystem) {
+      this.boonSystem.initElementUnlocks();
+    }
+
     // 应用祝福到发射器
 
     if (this.boonSystem) {
@@ -679,6 +718,9 @@ class GameEngine {
       }
 
     }
+
+    // 初始化道具系统
+    this.itemSystem.init();
 
     this.systems.order.init(levelConfig.maxOrders + (this.boonSystem ? this.boonSystem.getExtraOrderSlots() : 0), weights);
 
@@ -726,7 +768,13 @@ class GameEngine {
 
     this._startAutoSort();
 
-    // === 诅咒阶段：关卡开始效果 ===
+
+
+    // 启动自动合成引擎
+    if (!this.autoPlay) {
+      this.autoPlay = new AutoPlaySystem(this);
+    }
+    this.autoPlay.start();    // === 诅咒阶段：关卡开始效果 ===
 
     if (this.boonSystem) {
 
@@ -866,6 +914,28 @@ class GameEngine {
 
    */
 
+  /**
+   * 订单超时扣分
+   * @param {object} order - 超时订单对象
+   */
+  _deductScoreForExpiredOrder(order) {
+    // 订单超时中断连击
+    this._resetCombo('expired');
+    const penalty = Math.min(3, Math.max(1, Math.floor(order.reward * 0.5)));
+    this.state.score -= penalty;
+    window.eventBus.emit('score:updated', {
+      score: this.state.score,
+      targetScore: this.state.targetScore,
+    });
+    window.eventBus.emit('notification', {
+      message: `⏰ 订单"${ELEMENT_TYPES[order.elementType]?.name || '未知'} Lv.${order.level}"超时！扣除${penalty}分`,
+      type: 'warning',
+    });
+    if (this.state.score <= 0) {
+      this._onGameOver('积分归零，游戏结束！');
+    }
+  }
+
   _checkScoreComplete() {
 
     if (!this.state.isPlaying) return;
@@ -898,7 +968,8 @@ class GameEngine {
 
       case 'score':
 
-        isMet = this.state.score >= currentWave.target;
+        // 生存模式（targetScore=Infinity）下 score 波次自动跳过
+        isMet = this.state.targetScore === Infinity || this.state.score >= currentWave.target;
 
         break;
 
@@ -988,7 +1059,7 @@ class GameEngine {
 
     if (this._currentWaveIndex >= this._waves.length) {
 
-      // 所有波次完成 → 检查是否达到通关分数
+      // 所有波次完成 → 检查是否达到通关分数（生存模式 targetScore=Infinity 永不触发）
 
       if (this.state.score >= this.state.targetScore) {
 
@@ -1248,9 +1319,13 @@ class GameEngine {
 
     }
 
-    // 特殊处理：加速生产 → 发射器视觉特效由 UIManager 通过 event:started 处理
+    // 特殊处理：加速生产 → 将倍率应用到发射器 modifiers
 
-    // （无需额外逻辑）
+    if (event.id === 'speed_up') {
+      for (const emitter of this.state.emitters) {
+        emitter.modifiers.cooldownMultiplier *= this._eventCtx.emitterSpeedMultiplier;
+      }
+    }
 
     // 特殊处理：元素洪流启动定时填充
 
@@ -1336,6 +1411,15 @@ class GameEngine {
 
       this._unfreezeEmitters();
 
+    }
+
+    // 恢复发射器冷却倍率（加速生产事件结束）
+
+    if (event.id === 'speed_up') {
+      for (const emitter of this.state.emitters) {
+        // 恢复：除以 0.5 即乘以 2
+        emitter.modifiers.cooldownMultiplier /= this._eventCtx.emitterSpeedMultiplier;
+      }
     }
 
     // 停止洪流定时器
@@ -1489,6 +1573,14 @@ class GameEngine {
       reward: Math.floor(template.reward * 1.5), // 1.5倍奖励
 
       isRush: true,
+
+      timeLimit: 15000,
+
+      createdAt: Date.now(),
+
+      expiresAt: Date.now() + 16000, // 与事件持续时间（15s）对齐，多 1s 缓冲避免事件结束前订单先消失
+
+      quality: 'rare',
 
     };
 
@@ -1984,6 +2076,12 @@ class GameEngine {
 
     this._resetRatingData();
 
+    // 重置道具风暴/冻结状态（防止延续到下一关）
+    if (this.itemSystem) {
+      this.itemSystem._stormEndTime = 0;
+      this.itemSystem._freezeEndTime = 0;
+    }
+
     // 清除连击超时
 
     if (this._comboTimeoutId) {
@@ -2093,6 +2191,8 @@ class GameEngine {
     if (this._gameLoopId) cancelAnimationFrame(this._gameLoopId);
 
     this._lastFrameTime = performance.now();
+    this._lastOrderTimerCheck = performance.now();
+    this._lastTimerUiUpdate = performance.now();
 
     const loop = (timestamp) => {
 
@@ -2112,6 +2212,68 @@ class GameEngine {
 
         this._lastFrameTime = timestamp;
 
+      }
+
+      // === 订单超时检测（每秒检查一次，冻结期间跳过） ===
+
+      if (timestamp - this._lastOrderTimerCheck > 800) {
+
+        this._lastOrderTimerCheck = timestamp;
+
+        const now = Date.now();
+
+        // 冻结效果：冻结期间跳过超时检测
+        if (this.itemSystem && this.itemSystem._freezeEndTime > now) {
+          // 冻结中，不做任何事
+        } else {
+          // 冻结到期时解冻
+          if (this.itemSystem && this.itemSystem._freezeEndTime > 0 && this.itemSystem._freezeEndTime <= now) {
+            this.itemSystem._unfreezeOrders();
+          }
+          for (const order of this.systems.order.orders) {
+            if (!order.expired && now >= order.expiresAt) {
+              order.expired = true;
+              this._deductScoreForExpiredOrder(order);
+              this.systems.order.removeExpiredOrder(order.id);
+            }
+          }
+        }
+      }
+
+      // === 订单倒计时 UI 更新（每秒约4次） ===
+
+      if (timestamp - this._lastTimerUiUpdate > 230) {
+
+        this._lastTimerUiUpdate = timestamp;
+
+        const now = Date.now();
+        const isFrozen = this.itemSystem && this.itemSystem._freezeEndTime > now;
+
+        // 冻结期间：为新刷新的订单（无 _savedRemaining）保存剩余时间
+        if (isFrozen) {
+          for (var _o of this.systems.order.orders) {
+            if (!_o.expired && _o._savedRemaining === undefined) {
+              _o._savedRemaining = _o.expiresAt - Date.now();
+            }
+          }
+        }
+
+        window.eventBus.emit('order-timers:updated', {
+          orders: this.systems.order.orders.map(function(o) {
+            var remainingMs;
+            if (isFrozen && o._savedRemaining !== undefined) {
+              remainingMs = o._savedRemaining;
+            } else {
+              remainingMs = Math.max(0, o.expiresAt - Date.now());
+            }
+            return {
+              id: o.id,
+              remainingMs: remainingMs,
+              timeLimit: o.timeLimit,
+              expired: o.expired,
+            };
+          }),
+        });
       }
 
       // === 紧急事件系统：定期检查触发（约每3秒） ===
@@ -3910,7 +4072,14 @@ class GameEngine {
 
     const now = Date.now();
 
-    if (!emitter.isReadyToSpawn(now)) return;
+    // 元素风暴：风暴激活期间无视冷却
+    const isStormActive = this.itemSystem && this.itemSystem._stormEndTime > now;
+    if (!isStormActive && !emitter.isReadyToSpawn(now)) return;
+
+    // 元素风暴：强制重置冷却时间使 spawn 内部检查通过
+    if (isStormActive) {
+      emitter.lastSpawnTime = 0;
+    }
 
     // 检查棋盘是否已满
 
@@ -3982,13 +4151,15 @@ class GameEngine {
 
     }
 
-    // 产出元素
+    // 获取产出上下文（单一发射器模式）
+    const spawnContext = this.boonSystem ? this.boonSystem.getSpawnContext() : null;
 
-    const element = emitter.spawn(now);
+    // 产出元素（传入上下文）
+    const element = emitter.spawn(now, spawnContext);
 
     if (!element) return;
 
-    // 如果是数组（双重产出），逐个放置
+    // 如果是数组（双重产出/多元素产出），逐个放置
 
     const elements = Array.isArray(element) ? element : [element];
 
@@ -5127,6 +5298,78 @@ class GameEngine {
 
   }
 
+  // ==================== 连击奖励系统方法 ====================
+
+  /**
+   * 更新连击状态（在订单提交成功后调用）
+   */
+  _updateCombo() {
+    const now = Date.now();
+    const comboWindow = 5000; // 5 秒窗口
+
+    // 检查是否在连击窗口内
+    if (now - this._comboState.lastSubmitTime <= comboWindow) {
+      this._comboState.count++;
+    } else {
+      this._comboState.count = 1; // 重新开始连击
+    }
+
+    this._comboState.lastSubmitTime = now;
+
+    // 计算倍率
+    this._comboState.multiplier = this._calcComboMultiplier(this._comboState.count);
+
+    // 清除旧超时
+    if (this._comboState.timeoutId) {
+      clearTimeout(this._comboState.timeoutId);
+    }
+
+    // 设置新超时（连击窗口过后未提交则重置）
+    this._comboState.timeoutId = setTimeout(() => {
+      this._resetCombo('timeout');
+    }, comboWindow);
+
+    // 发出更新事件
+    window.eventBus.emit('combo:updated', {
+      count: this._comboState.count,
+      multiplier: this._comboState.multiplier,
+    });
+
+    // 里程碑检测
+    this._checkComboMilestone(this._comboState.count);
+  }
+
+  /**
+   * 计算连击倍率
+   * @param {number} count - 连击数
+   * @returns {number} 倍率
+   */
+  _calcComboMultiplier(count) {
+    if (count >= 10) return 3.0;
+    if (count >= 5)  return 2.0;
+    if (count >= 3)  return 1.5;
+    if (count >= 2)  return 1.2;
+    return 1.0;
+  }
+
+  /**
+   * 重置连击状态
+   * @param {string} reason - 重置原因（timeout/expired/gameover/complete/destroy）
+   */
+  _resetCombo(reason) {
+    this._comboState.count = 0;
+    this._comboState.multiplier = 1.0;
+    if (this._comboState.timeoutId) {
+      clearTimeout(this._comboState.timeoutId);
+      this._comboState.timeoutId = null;
+    }
+    window.eventBus.emit('combo:broken', { reason: reason });
+    window.eventBus.emit('combo:updated', {
+      count: 0,
+      multiplier: 1.0,
+    });
+  }
+
   /** 检查连击里程碑：5/10/20连击 */
 
   _checkComboMilestone(comboCount) {
@@ -6259,24 +6502,27 @@ class GameEngine {
 
     }
 
-    const result = this.systems.order.submitOrder(
+    // 提交前记录订单卡片位置（用于双倍积分特效，避免 DOM 刷新后找不到）
+    const _cardEl = document.querySelector('.order-card[data-order-id="' + orderId + '"]');
+    const _cardRect = _cardEl ? _cardEl.getBoundingClientRect() : null;
+
+    let result = this.systems.order.submitOrder(
 
       orderId, this.state.board, this.systems.spawn
 
     );
-
     if (!result) {
-
-      window.eventBus.emit('notification', {
-
-        message: '棋盘上没有匹配的元素',
-
-        type: 'warning',
-
-      });
-
-      return;
-
+      // 尝试使用无属性元素提交（高一级）
+      const basicResult = this._trySubmitWithBasicElement(orderId);
+      if (basicResult) {
+        result = basicResult;
+      } else {
+        window.eventBus.emit('notification', {
+          message: '棋盘上没有匹配的元素',
+          type: 'warning',
+        });
+        return;
+      }
     }
 
     // 计算积分奖励（考虑祝福修正）
@@ -6312,6 +6558,27 @@ class GameEngine {
     // 应用紧急事件积分倍率
 
     reward = Math.floor(reward * this._eventCtx.scoreMultiplier);
+
+    // === 道具系统：双倍积分倍率 ===
+    let wasDoubled = false;
+    if (this._nextOrderMultiplier > 1) {
+      reward = Math.floor(reward * this._nextOrderMultiplier);
+      this._nextOrderMultiplier = 1;
+      wasDoubled = true;
+    }
+
+    // 双倍积分视觉特效
+    if (wasDoubled) {
+      window.eventBus.emit('item:double-score-effect', { reward: reward, orderId: orderId, cardRect: _cardRect });
+    }
+
+    // === 连击奖励系统：更新连击并应用倍率 ===
+
+    this._updateCombo();
+
+    const comboMultiplier = this._comboState.multiplier;
+
+    reward = Math.floor(reward * comboMultiplier);
 
     this.state.score += reward;
 
@@ -6415,11 +6682,134 @@ class GameEngine {
 
   }
 
+  /** 尝试使用无属性元素提交订单（无属性元素可提交任意类型订单，但需高 1 级） */
+  _trySubmitWithBasicElement(orderId) {
+    if (!this.boonSystem) {
+      console.log('[BasicSubmit] boonSystem 为空');
+      return null;
+    }
+    const order = this.systems.order.getOrderById(orderId);
+    if (!order) {
+      console.log('[BasicSubmit] 未找到订单', orderId);
+      return null;
+    }
+    const requiredLevel = order.level;
+    const neededLevel = requiredLevel + 1;
+    console.log(`[BasicSubmit] 订单等级=${requiredLevel}，所需无属性等级=${neededLevel}`);
+    // 在棋盘上查找符合条件的无属性元素
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        const el = this.state.board[r][c];
+        console.log(`[BasicSubmit] 检查[${r}][${c}] typeId=${el?.typeId} level=${el?.level}`);
+        if (el && el.typeId === 'basic' && el.level >= neededLevel) {
+          console.log(`[BasicSubmit] 找到符合条件的无属性元素 [${r}][${c}] level=${el.level}`);
+          // 找到符合条件的无属性元素，消耗它
+          this.state.board[r][c] = null;
+          // 从订单系统中移除订单并补充新订单
+          const orderIndex = this.systems.order.orders.findIndex((o) => o.id === orderId);
+          console.log(`[BasicSubmit] 订单在数组中索引=${orderIndex}`);
+          if (orderIndex !== -1) {
+            this.systems.order.orders.splice(orderIndex, 1);
+            this.systems.order.completedOrders++;
+            const newOrders = this.systems.order.fillOrders();
+            console.log(`[BasicSubmit] 已移除订单，补充 ${newOrders.length} 个新订单`);
+          } else {
+            console.log('[BasicSubmit] 订单已在之前被移除，跳过');
+          }
+          // 计算奖励
+          const reward = Math.floor(neededLevel * 10 * this.boonSystem.getOrderRewardMultiplier());
+          console.log(`[BasicSubmit] 奖励=${reward}`);
+          // 发射订单提交事件
+          window.eventBus.emit('order:submitted', { reward, element: el, order });
+          return { success: true, reward: reward, element: el };
+        }
+      }
+    }
+    console.log('[BasicSubmit] 未找到符合条件的无属性元素');
+    return null;
+  }
+
+  /** 将棋盘上所有无属性元素转化为指定属性元素（等级不变） */
+  _convertBasicElements(elementType) {
+    let convertedCount = 0;
+    for (let r = 0; r < this.state.board.length; r++) {
+      for (let c = 0; c < this.state.board[r].length; c++) {
+        const el = this.state.board[r][c];
+        if (el && el.type === 'basic') {
+          el.type = elementType;
+          el.icon = this._getElementIcon(elementType);
+          el.color = this._getElementColor(elementType);
+          convertedCount++;
+        }
+      }
+    }
+    if (convertedCount > 0) {
+      this.boardRenderer.renderAll(this.state.board);
+      window.eventBus.emit('notification', {
+        message: `✨ ${convertedCount} 个无属性元素已转化为 ${this._getElementName(elementType)}`,
+        type: 'info',
+      });
+    }
+  }
+
+  /** 获取元素类型对应的图标 */
+  _getElementIcon(type) {
+    const icons = { fire: '🔥', water: '💧', earth: '🪨', air: '🌪', plant: '🌿', basic: '⚪' };
+    return icons[type] || '✦';
+  }
+
+  /** 获取元素类型对应的颜色 */
+  _getElementColor(type) {
+    const colors = { fire: '#FF4444', water: '#4488FF', earth: '#8B4513', air: '#88CCFF', plant: '#44BB44', basic: '#AAAAAA' };
+    return colors[type] || '#FFFFFF';
+  }
+
+  /** 获取元素类型对应的名称 */
+  _getElementName(type) {
+    const names = { fire: '火焰', water: '水流', earth: '大地', air: '疾风', plant: '草木', basic: '无属性' };
+    return names[type] || type;
+  }
+
+  /** 游戏结束处理（生存模式积分归零） */
+  _onGameOver(reason) {
+    if (!this.state.isPlaying) return;
+    this.state.isPlaying = false;
+    if (this.autoPlay) this.autoPlay.stop();
+    this._stopGameLoop();
+    this._stopAutoSave();
+    this._stopAutoSort();
+    if (this._activeEvent) {
+      this._endActiveEvent();
+    }
+    this._resetEventSystem();
+    if (this._comboTimeoutId) {
+      clearTimeout(this._comboTimeoutId);
+      this._comboTimeoutId = null;
+    }
+    // 重置订单连击状态
+    this._resetCombo('gameover');
+    // 清理道具系统
+    if (this.itemSystem) this.itemSystem.destroy();
+    this._rageValue = 0;
+    if (this._ultimates) {
+      for (const u of this._ultimates) u.lastUsedTime = 0;
+    }
+    window.eventBus.emit('game:over', {
+      reason: reason,
+      score: this.state.score,
+      targetScore: this.state.targetScore,
+      isRogue: this.isRogueMode,
+      survived: false,
+    });
+  }
+
   /** 通关处理 */
 
   _onLevelComplete() {
 
     this.state.isPlaying = false;
+
+    if (this.autoPlay) this.autoPlay.stop();
 
     this._stopGameLoop();
 
@@ -6446,6 +6836,10 @@ class GameEngine {
       this._comboTimeoutId = null;
 
     }
+
+    // 重置订单连击状态
+
+    this._resetCombo('complete');
 
     // 重置怒气值
 
@@ -6759,6 +7153,13 @@ class GameEngine {
       this._comboTimeoutId = null;
 
     }
+
+    // 重置订单连击状态
+
+    this._resetCombo('destroy');
+
+    // 清理道具系统
+    if (this.itemSystem) this.itemSystem.destroy();
 
     // 重置怒气
 

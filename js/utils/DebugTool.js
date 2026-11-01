@@ -69,6 +69,7 @@
       <button class="debug-tab" data-tab="randomevents">🎲 随机事件 (${Object.values(EVENT_POOL).flat().length})</button>
       <button class="debug-tab" data-tab="bosses">👑 Boss (${BOSS_CONFIGS.length})</button>
       <button class="debug-tab" data-tab="ultimates">🔥 大招</button>
+      <button class="debug-tab" data-tab="items">🎒 道具</button>
     `;
 
     // 内容区
@@ -147,6 +148,95 @@
       }, 50);
     }
 
+    // 道具页签：添加道具控制区域
+    if (tab === 'items') {
+      const control = document.createElement('div');
+      control.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:8px 10px;margin:4px 0 8px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3);border-radius:8px;';
+      control.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14px;color:#4caf50;white-space:nowrap;">🎒 添加道具</span>
+          <select id="debug-item-select" style="flex:1;min-width:120px;padding:4px 6px;border:1px solid #555;border-radius:4px;background:#2a2a2a;color:#fff;font-size:13px;">
+            <option value="time_freeze">⏸ 时间停滞</option>
+            <option value="instant_complete">✅ 立即完成</option>
+            <option value="skip_order">➡ 跳过订单</option>
+            <option value="element_storm">🌪 元素风暴</option>
+            <option value="double_score">✖2 双倍积分</option>
+          </select>
+          <input id="debug-item-count" type="number" min="1" max="10" value="1"
+            style="width:50px;padding:4px 6px;border:1px solid #555;border-radius:4px;background:#2a2a2a;color:#fff;font-size:13px;text-align:center;">
+          <button id="debug-item-add-btn" style="padding:6px 16px;border:none;border-radius:6px;background:linear-gradient(135deg,#4caf50,#388e3c);color:#fff;cursor:pointer;font-size:13px;font-weight:bold;">+ 添加</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button id="debug-item-clear-btn" style="padding:4px 12px;border:none;border-radius:4px;background:rgba(244,67,54,0.3);color:#f44336;cursor:pointer;font-size:12px;">🗑 清空所有道具</button>
+          <span style="color:#888;font-size:11px;">提示：道具数量受 maxStack 限制</span>
+        </div>
+      `;
+      container.appendChild(control);
+
+      setTimeout(() => {
+        const select = document.getElementById('debug-item-select');
+        const countInput = document.getElementById('debug-item-count');
+        const addBtn = document.getElementById('debug-item-add-btn');
+        const clearBtn = document.getElementById('debug-item-clear-btn');
+
+        if (addBtn && select && countInput) {
+          addBtn.addEventListener('click', () => {
+            const ge = window.__gameEngine;
+            if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+            if (!ge.itemSystem) { alert('道具系统未初始化'); return; }
+            const itemId = select.value;
+            const count = parseInt(countInput.value) || 1;
+            ge.itemSystem.addItem(itemId, count);
+            window.eventBus.emit('notification', {
+              message: `🎒 已添加 ${count} 个 ${ItemSystem.ITEM_DEFS[itemId].icon} ${ItemSystem.ITEM_DEFS[itemId].name}`,
+              type: 'info',
+            });
+          });
+          countInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addBtn.click();
+          });
+        }
+        if (clearBtn) {
+          clearBtn.addEventListener('click', () => {
+            const ge = window.__gameEngine;
+            if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+            if (!ge.itemSystem) { alert('道具系统未初始化'); return; }
+            ge.itemSystem.items = {};
+            window.eventBus.emit('items:updated', {});
+            window.eventBus.emit('notification', {
+              message: '🗑 已清空所有道具',
+              type: 'info',
+            });
+          });
+        }
+      }, 50);
+    }
+
+    // 祝福页签顶部工具栏
+    if (tab === 'boons') {
+      const toolbar = document.createElement('div');
+      toolbar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;';
+      
+      const unlockBtn = document.createElement('button');
+      unlockBtn.textContent = '🔓 解锁祝福数量上限';
+      unlockBtn.style.cssText = 'padding:6px 14px;background:linear-gradient(135deg,#ff7043,#ff5722);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;';
+      unlockBtn.title = '将祝福数量上限设置为无上限（仅限本局）';
+      unlockBtn.addEventListener('click', () => {
+        const bs = window.__boonSystem;
+        if (bs) {
+          bs.maxBoons = Infinity;
+          window.eventBus.emit('notification', {
+            message: '🔓 祝福数量上限已解锁为无上限（仅限本局）',
+            type: 'info',
+          });
+        } else {
+          alert('祝福系统未初始化');
+        }
+      });
+      toolbar.appendChild(unlockBtn);
+      container.appendChild(toolbar);
+    }
+
     const list = document.createElement('div');
     list.className = 'debug-list';
 
@@ -223,6 +313,36 @@
         isBase: !u.unlockBoon,
         type: 'ultimate',
       }));
+    } else if (tab === 'items') {
+      const defs = ItemSystem.ITEM_DEFS;
+      items = Object.keys(defs).map((id) => ({
+        id: id,
+        icon: defs[id].icon,
+        name: defs[id].name,
+        desc: defs[id].description,
+        maxStack: defs[id].maxStack,
+        type: 'item',
+      }));
+    } else if (tab === 'items') {
+      const defs = ItemSystem.ITEM_DEFS;
+      items = Object.keys(defs).map((id) => ({
+        id: id,
+        icon: defs[id].icon,
+        name: defs[id].name,
+        desc: defs[id].description,
+        maxStack: defs[id].maxStack,
+        type: 'item',
+      }));
+    } else if (tab === 'items') {
+      const defs = ItemSystem.ITEM_DEFS;
+      items = Object.keys(defs).map((id) => ({
+        id: id,
+        icon: defs[id].icon,
+        name: defs[id].name,
+        desc: defs[id].description,
+        maxStack: defs[id].maxStack,
+        type: 'item',
+      }));
     } else if (tab === 'bosses') {
       items = BOSS_CONFIGS.map((b) => ({
         id: b.id,
@@ -256,6 +376,9 @@
       else if (item.type === 'event') catLabel = item.category === 'positive' ? '增益' : item.category === 'negative' ? '负面' : item.category === 'challenge' ? '挑战' : '随机';
       else if (item.type === 'ultimate') catLabel = '大招';
       else if (item.type === 'boss') catLabel = 'Boss';
+      else if (item.type === 'item') catLabel = '道具';
+      else if (item.type === 'item') catLabel = '道具';
+      else if (item.type === 'item') catLabel = '道具';
 
       // 额外信息
       let extraInfo = '';
@@ -281,6 +404,15 @@
             <span class="debug-extra">${statusIcon} 需要祝福解锁</span>
           `;
         }
+      }
+      if (item.type === 'item') {
+        extraInfo = `<span class="debug-extra">📦 最大堆叠: ${item.maxStack}</span>`;
+      }
+      if (item.type === 'item') {
+        extraInfo = `<span class="debug-extra">📦 最大堆叠: ${item.maxStack}</span>`;
+      }
+      if (item.type === 'item') {
+        extraInfo = `<span class="debug-extra">📦 最大堆叠: ${item.maxStack}</span>`;
       }
       if (item.type === 'boss') {
         // 构建机制参数列表
@@ -408,6 +540,48 @@
 
     if (!ge.state.isPlaying) {
       alert('游戏未在进行中，请先开始一局游戏');
+      return;
+    }
+
+    if (item.type === 'item') {
+      const ge = window.__gameEngine;
+      if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+      if (!ge.itemSystem) { alert('道具系统未初始化'); return; }
+      const def = ItemSystem.ITEM_DEFS[item.id];
+      if (!def) return;
+      ge.itemSystem.addItem(item.id, 1);
+      window.eventBus.emit('notification', {
+        message: `🎒 已添加 ${def.icon} ${def.name}`,
+        type: 'info',
+      });
+      return;
+    }
+
+    if (item.type === 'item') {
+      const ge = window.__gameEngine;
+      if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+      if (!ge.itemSystem) { alert('道具系统未初始化'); return; }
+      const def = ItemSystem.ITEM_DEFS[item.id];
+      if (!def) return;
+      ge.itemSystem.addItem(item.id, 1);
+      window.eventBus.emit('notification', {
+        message: `🎒 已添加 ${def.icon} ${def.name}`,
+        type: 'info',
+      });
+      return;
+    }
+
+    if (item.type === 'item') {
+      const ge = window.__gameEngine;
+      if (!ge || !ge.state.isPlaying) { alert('游戏未在进行中'); return; }
+      if (!ge.itemSystem) { alert('道具系统未初始化'); return; }
+      const def = ItemSystem.ITEM_DEFS[item.id];
+      if (!def) return;
+      ge.itemSystem.addItem(item.id, 1);
+      window.eventBus.emit('notification', {
+        message: `🎒 已添加 ${def.icon} ${def.name}`,
+        type: 'info',
+      });
       return;
     }
 

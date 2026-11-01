@@ -9,7 +9,7 @@ class BoonSystem {
   constructor() {
     this.boons = [];
     this.curses = [];
-    this.maxBoons = ROGUE_DIFFICULTY.maxBoons;
+    this.maxBoons = ROGUE_DIFFICULTY.maxBoons; // 默认 8，受局外成长影响
     this.firstOrderInLevel = true;
     /** 诅咒阶段状态：{ curseId: currentStage } */
     this._curseStages = {};
@@ -19,6 +19,19 @@ class BoonSystem {
     this._greedOrderCount = 0;
     /** 脆弱棋盘封锁格列表 */
     this._blockedCells = [];
+
+    // ==================== 元素解锁系统 ====================
+    /** 元素解锁状态：{ elementType: boolean } */
+    this._unlockedElements = {};
+    /** 元素产出概率配置：{ elementType: probability } */
+    this._spawnProbabilities = {};
+    /** 是否已获得亲和祝福（控制无属性元素退出） */
+    this._hasAnyAffinityBoon = false;
+    /** 多元素产出祝福激活状态 */
+    this._multiSpawnBoons = {
+      splitFlow: false,    // 灵素分流：2种不同属性元素
+      myriadSource: false, // 万象之源：3种不同属性元素
+    };
   }
 
   /** 重置（新局调用） */
@@ -30,6 +43,13 @@ class BoonSystem {
     this._permanentGrowthCount = 0;
     this._greedOrderCount = 0;
     this._blockedCells = [];
+    this._unlockedElements = {};
+    this._spawnProbabilities = {};
+    this._hasAnyAffinityBoon = false;
+    this._multiSpawnBoons = {
+      splitFlow: false,
+      myriadSource: false,
+    };
   }
 
   /** 获取当前祝福列表 */
@@ -81,9 +101,11 @@ class BoonSystem {
    * 应用所有祝福到发射器
    */
   applyToEmitters(emitters) {
+    // 先重置所有发射器的 spawnLevelBonus，避免每次重新应用祝福时累加
+    emitters.forEach(e => { e.modifiers.spawnLevelBonus = 0; });
     for (const boon of this.boons) {
       if (boon.apply && boon.category === 'production') {
-        boon.apply(emitters);
+        boon.apply(emitters, this);
       }
     }
     for (const curse of this.curses) {
@@ -467,6 +489,175 @@ class BoonSystem {
   getBlockedCells() { return [...this._blockedCells]; }
 
   /** 获取脆弱棋盘棋盘缩减配置 */
+  // ==================== 元素解锁系统 ====================
+
+  /**
+   * 初始化元素解锁状态（新局调用）
+   */
+  initElementUnlocks() {
+    this._unlockedElements = {};
+    this._spawnProbabilities = {};
+    this._hasAnyAffinityBoon = false;
+    this._multiSpawnBoons = {
+      splitFlow: false,
+      myriadSource: false,
+    };
+  }
+
+  /**
+   * 获取产出上下文（供 Emitter.spawn 使用）
+   * @returns {object|null}
+   */
+  getSpawnContext() {
+    let availableTypes;
+    let probabilities;
+
+    if (!this._hasAnyAffinityBoon) {
+      // 未获得任何亲和祝福：只产出无属性元素
+      availableTypes = ['basic'];
+      probabilities = { basic: 1.0 };
+    } else {
+      // 已获得亲和祝福：产出已解锁的属性元素
+      const types = this.getUnlockedTypes();
+      if (types.length === 0) return null;
+      availableTypes = types;
+      probabilities = { ...this._spawnProbabilities };
+    }
+
+    return {
+      availableTypes,
+      probabilities,
+      multiSpawnFlags: { ...this._multiSpawnBoons },
+    };
+  }
+
+  /**
+   * 处理元素亲和祝福的获取
+   * @param {string} boonId - 祝福ID
+   * @returns {boolean} 是否首次获得亲和祝福
+   */
+  handleAffinityBoon(boonId) {
+    const affinityMap = {
+      'boon_fire_affinity': 'fire',
+      'boon_water_affinity': 'water',
+      'boon_earth_affinity': 'earth',
+      'boon_air_affinity': 'air',
+      'boon_plant_affinity': 'plant',
+    };
+
+    const elementType = affinityMap[boonId];
+    if (!elementType) return false;
+
+    const isFirstAffinity = !this._hasAnyAffinityBoon;
+
+    // 解锁属性元素
+    if (!this._unlockedElements[elementType]) {
+      this._unlockedElements[elementType] = true;
+    }
+
+    // 标记已获得亲和祝福（触发无属性退出）
+    this._hasAnyAffinityBoon = true;
+
+    // 重新计算概率
+    this._recalculateProbabilities();
+
+    // 如果是首次获得亲和祝福，触发无属性元素转化事件
+    if (isFirstAffinity) {
+      window.eventBus.emit('element:convert-basic', {
+        convertTo: elementType,
+      });
+    }
+
+    window.eventBus.emit('element:unlocked', {
+      type: elementType,
+      name: ELEMENT_TYPES[elementType]?.name || elementType,
+      icon: ELEMENT_TYPES[elementType]?.icon || '?',
+      unlockedCount: this.getUnlockedCount(),
+      totalTypes: Object.keys(ELEMENT_TYPES).length - 1,
+      isFirstAffinity: isFirstAffinity,
+      basicWithdrawn: isFirstAffinity,
+    });
+
+    return isFirstAffinity;
+  }
+
+  /**
+   * 重新计算所有已解锁属性元素的产出概率
+   */
+  _recalculateProbabilities() {
+    const types = this.getUnlockedTypes();
+    const count = types.length;
+
+    if (count === 0) {
+      this._spawnProbabilities = {};
+      return;
+    }
+
+    const distribution = {
+      1: [1.0],
+      2: [0.6, 0.4],
+      3: [0.4, 0.3, 0.3],
+      4: [0.3, 0.25, 0.25, 0.2],
+      5: [0.2, 0.2, 0.2, 0.2, 0.2],
+    };
+
+    const weights = distribution[count] || Array(count).fill(1 / count);
+
+    this._spawnProbabilities = {};
+    for (let i = 0; i < types.length; i++) {
+      this._spawnProbabilities[types[i]] = weights[i];
+    }
+  }
+
+  /**
+   * 获取已解锁的属性元素类型列表
+   * @returns {string[]}
+   */
+  getUnlockedTypes() {
+    return Object.keys(this._unlockedElements).filter(t => this._unlockedElements[t]);
+  }
+
+  /**
+   * 获取已解锁属性元素数量
+   * @returns {number}
+   */
+  getUnlockedCount() {
+    return this.getUnlockedTypes().length;
+  }
+
+  /**
+   * 检查某元素是否已解锁
+   * @param {string} elementType
+   * @returns {boolean}
+   */
+  isElementUnlocked(elementType) {
+    return !!this._unlockedElements[elementType];
+  }
+
+  /**
+   * 是否已获得亲和祝福
+   * @returns {boolean}
+   */
+  hasAffinityBoon() {
+    return this._hasAnyAffinityBoon;
+  }
+
+  /**
+   * 处理多元素产出祝福（新增祝福）
+   * @param {string} boonId
+   */
+  handleMultiSpawnBoon(boonId) {
+    switch (boonId) {
+      case 'boon_split_flow':
+        this._multiSpawnBoons.splitFlow = true;
+        break;
+      case 'boon_myriad_source':
+        this._multiSpawnBoons.myriadSource = true;
+        break;
+    }
+  }
+
+
   getFragileBoardReduction() {
     if (!this.hasCurse('curse_fragile_board')) return { colsReduce: 0, rowsReduce: 0 };
     const stage = this._curseStages['curse_fragile_board'] || 1;

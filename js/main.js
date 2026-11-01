@@ -42,7 +42,7 @@
 
     // 初始化肉鸽系统关联
     rogueSystem.init(boonSystem, eventSystem, metaProgress);
-    rogueUIManager.init(rogueSystem, boonSystem, eventSystem, gameEngine);
+    rogueUIManager.init(rogueSystem, boonSystem, eventSystem, gameEngine, metaProgress);
 
     // 暴露全局引用供调试工具使用
     window.__gameEngine = gameEngine;
@@ -604,17 +604,17 @@
           console.log('[肉鸽] advanceToNextNode, hasNext:', hasNext, 'currentNodeIndex:', rogueSystem.state.currentNodeIndex, 'nodes.length:', rogueSystem.state.nodes.length);
           
           if (!hasNext) {
-            // 本层结束，先给战斗奖励，再进入下一层
-            giveCombatReward().then(() => {
-              rogueSystem.nextFloor();
-              if (rogueSystem.state.runState === 'won') return;
-              setTimeout(() => {
+            // 本层结束，由玩家点击评分弹窗按钮后触发后续流程
+            window.__roguePendingAction = function() {
+              giveCombatReward().then(() => {
+                rogueSystem.nextFloor();
+                if (rogueSystem.state.runState === 'won') return;
                 window.eventBus.emit('rogue:show-floor-map', {
                   floor: rogueSystem.getCurrentFloor(),
                   nodes: rogueSystem.state.nodes,
                 });
-              }, 500);
-            });
+              });
+            };
           } else {
             // 有下一个节点，根据类型路由
             const nextNode = rogueSystem.getCurrentNode();
@@ -629,20 +629,28 @@
             console.log('[肉鸽] 路由决策: isCombatNode=', isCombatNode, 'type=', nextNode.type);
             
             if (isCombatNode) {
-              // 下一个是战斗节点，直接启动
-              setTimeout(() => {
+              // 下一个是战斗节点，由玩家点击评分弹窗按钮后触发
+              window.__roguePendingAction = function() {
                 gameEngine.startRogueLevel(rogueSystem.getTargetScore(), nextNode);
-              }, 600);
+              };
             } else {
-              // 下一个是非战斗节点，通过 UI 管理器展示对应界面
+              // 下一个是非战斗节点，由玩家点击评分弹窗按钮后触发
               console.log('[肉鸽] 即将调用 startCurrentNode');
-              setTimeout(() => {
+              window.__roguePendingAction = function() {
                 console.log('[肉鸽] 执行 startCurrentNode');
                 rogueUIManager.startCurrentNode();
-              }, 400);
+              };
             }
           }
         }
+      }
+    });
+
+    // 监听评分弹窗按钮点击（由玩家触发路由）
+    window.eventBus.on('rogue:rating-continue', () => {
+      if (typeof window.__roguePendingAction === 'function') {
+        window.__roguePendingAction();
+        window.__roguePendingAction = null;
       }
     });
 

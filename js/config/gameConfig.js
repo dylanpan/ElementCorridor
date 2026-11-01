@@ -9,6 +9,14 @@
 // ==================== 元素类型定义 ====================
 // 所有基础元素在此定义，新增元素只需在此添加条目
 const ELEMENT_TYPES = {
+  basic: {
+    id: 'basic',
+    name: '无属性',
+    icon: '⚪',
+    color: '#AAAAAA',
+    bgColor: '#F5F5F5',
+    description: '纯净的无属性灵力，可转化为任何元素',
+  },
   fire: {
     id: 'fire',
     name: '火焰',
@@ -66,49 +74,13 @@ const ELEMENT_LEVELS = [
 // 每个发射器产出特定类型的元素，可配置冷却时间和初始等级
 const EMITTER_CONFIGS = [
   {
-    id: 'emitter_fire',
-    elementType: 'fire',
-    name: '火焰发射器',
-    icon: '🔥',
-    cooldownMs: 2000,
+    id: 'emitter_unified',
+    elementType: 'unified',
+    name: '灵素之源',
+    icon: '✨',
+    cooldownMs: 2800,
     spawnLevel: 1,
-    description: '产出火焰元素（冷却2秒）',
-  },
-  {
-    id: 'emitter_water',
-    elementType: 'water',
-    name: '水滴发射器',
-    icon: '💧',
-    cooldownMs: 2000,
-    spawnLevel: 1,
-    description: '产出水滴元素（冷却2秒）',
-  },
-  {
-    id: 'emitter_earth',
-    elementType: 'earth',
-    name: '土块发射器',
-    icon: '🪨',
-    cooldownMs: 2000,
-    spawnLevel: 1,
-    description: '产出土块元素（冷却2秒）',
-  },
-  {
-    id: 'emitter_air',
-    elementType: 'air',
-    name: '微风发射器',
-    icon: '🌪️',
-    cooldownMs: 2500,
-    spawnLevel: 1,
-    description: '产出微风元素（冷却2.5秒）',
-  },
-  {
-    id: 'emitter_plant',
-    elementType: 'plant',
-    name: '植物发射器',
-    icon: '🌿',
-    cooldownMs: 3000,
-    spawnLevel: 1,
-    description: '产出植物元素（冷却3秒）',
+    description: '汇聚天地灵素的源泉，产出已解锁的元素',
   },
 ];
 
