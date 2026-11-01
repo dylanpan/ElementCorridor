@@ -45,6 +45,7 @@ class OrderSystem {
     this.maxOrders = 3;
     this.difficultyWeights = { easy: 70, medium: 30, hard: 0, rare: 0 };
     this.completedOrders = 0;
+    this.timeMultiplier = 1;
     this._usedTemplates = [];
     // 单一发射器模式：发射器产出类型状态
     this._emitterTypes = [];
@@ -61,6 +62,7 @@ class OrderSystem {
     this.difficultyWeights = difficultyWeights;
     this.orders = [];
     this.completedOrders = 0;
+    this.timeMultiplier = 1;
     this._usedTemplates = [];
     this._emitterTypes = [];
     this._hasAffinity = false;
@@ -187,8 +189,8 @@ class OrderSystem {
       quality: quality,
       completed: false,
       createdAt: Date.now(),
-      timeLimit: adjustedTime,
-      expiresAt: Date.now() + adjustedTime + orderOffset,
+      timeLimit: Math.floor(adjustedTime * this.timeMultiplier),
+      expiresAt: Date.now() + Math.floor(adjustedTime * this.timeMultiplier) + orderOffset,
       expired: false,
     };
 

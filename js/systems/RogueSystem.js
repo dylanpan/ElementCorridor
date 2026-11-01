@@ -50,9 +50,11 @@ class RogueSystem {
     this.state.runState = 'playing';
     this.state.currentFloor = 1;
 
-    // 应用局外成长效果
-    const effects = this.metaProgress ? this.metaProgress.getActiveEffects() : {};
-    if (effects.startGold) this.state.gold += effects.startGold;
+    // 应用局外成长效果（初始金币天赋）
+    if (this.gameEngine && this.gameEngine.upgradeSystem) {
+      const effects = this.gameEngine.upgradeSystem.getActiveEffects();
+      if (effects.startGold) this.state.gold += effects.startGold;
+    }
 
     // 生成第一层
     this._generateFloor(1);

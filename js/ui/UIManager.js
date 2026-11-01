@@ -1716,7 +1716,7 @@ class UIManager {
 
   /**
    * 显示评级结算面板
-   * @param {object} data - { level, score, targetScore, rating: { dimensions: {...}, overall: {...}, stats: {...}, stardustMultiplier } }
+   * @param {object} data - { level, score, targetScore, rating: { dimensions: {...}, overall: {...}, stats: {...}, ratingMultiplier } }
    */
   showRatingPanel(data) {
     const overlay = this.elements['game-overlay'];
@@ -1729,7 +1729,7 @@ class UIManager {
     const dims = rating.dimensions || {};
     const overall = rating.overall || {};
     const stats = rating.stats || {};
-    const multiplier = rating.stardustMultiplier || 0;
+    const multiplier = rating.ratingMultiplier || 0;
 
     // 维度评级映射
     const dimConfigs = [
@@ -1783,8 +1783,8 @@ class UIManager {
           <div class="rating-overall-grade" style="color:${overallColor}">${overall.grade || '-'}</div>
           <div class="rating-overall-title">${overall.title || ''}</div>
           <div class="rating-overall-score">得分：${data.score} / ${data.targetScore}</div>
-          <div class="rating-stardust-multiplier">
-            星尘倍率：<span style="color:${overallColor};font-weight:bold">x${multiplier.toFixed(2)}</span>
+          <div class="rating-multiplier">
+            评级倍率：<span style="color:${overallColor};font-weight:bold">x${multiplier.toFixed(2)}</span>
           </div>
         </div>
 
@@ -2645,5 +2645,136 @@ class UIManager {
         btn.classList.remove('item-btn-used');
       }, 400);
     }
+  }
+
+  // ==================== 升级系统 UI ====================
+
+  /**
+   * 显示升级面板
+   * @param {UpgradeSystem} upgradeSystem
+   * @param {Function} onClose - 关闭面板后的回调
+   */
+  showUpgradePanel(upgradeSystem, onClose) {
+    const overlay = document.getElementById('game-overlay');
+    const modal = document.getElementById('game-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalBtn = document.getElementById('modal-btn');
+
+    overlay.style.display = 'flex';
+    modalTitle.textContent = '* 天赋树 . 局外成长';
+    modalBtn.style.display = 'inline-block';
+    modalBtn.textContent = '返回';
+
+    const points = upgradeSystem.getPoints();
+    const defs = UpgradeSystem.UPGRADE_DEFS;
+
+    var upgradesHtml = '';
+
+    // 数值成长页签
+    upgradesHtml += '<div style="color:#ffd700;font-size:15px;font-weight:bold;padding:8px 0 4px 0;">* 数值成长</div>';
+    upgradesHtml += '<div style="color:#888;font-size:11px;padding:0 0 8px 0;">永久提升基础属性</div>';
+
+    for (const [id, def] of Object.entries(defs)) {
+      if (def.type !== 'stat') continue;
+      upgradesHtml += this._buildUpgradeItem(id, def, upgradeSystem, points);
+    }
+
+    // 功能天赋页签
+    upgradesHtml += '<div style="color:#ffd700;font-size:15px;font-weight:bold;padding:12px 0 4px 0;border-top:1px solid #333;margin-top:8px;">* 功能天赋</div>';
+    upgradesHtml += '<div style="color:#888;font-size:11px;padding:0 0 8px 0;">解锁全新能力</div>';
+
+    for (const [id, def] of Object.entries(defs)) {
+      if (def.type !== 'talent') continue;
+      upgradesHtml += this._buildUpgradeItem(id, def, upgradeSystem, points);
+    }
+
+    modalBody.innerHTML = '<div style="margin-bottom:12px; text-align:center; color:#aaa; font-size:13px;">* 升级点数: <strong style="color:#ffd700;font-size:18px;">' + points + '</strong>&nbsp;&nbsp;|&nbsp;&nbsp;<button id="upgrade-reset-btn" style="padding:4px 12px; background:rgba(255,255,255,0.08); color:#ff8a80; border:1px solid #ff5252; border-radius:6px; cursor:pointer; font-size:12px;">o 重置所有升级</button></div><div style="max-height:55vh; overflow-y:auto; padding-right:4px;">' + upgradesHtml + '</div>';
+
+    const modalEl = document.getElementById('game-modal');
+    if (modalEl) modalEl.style.maxHeight = '80vh';
+
+    modalBtn.onclick = function() {
+      overlay.style.display = 'none';
+      if (typeof onClose === 'function') {
+        onClose();
+      }
+    };
+
+    var self = this;
+    setTimeout(function() {
+      document.querySelectorAll('.upgrade-btn').forEach(function(btn) {
+        btn.onclick = function() {
+          var result = upgradeSystem.upgrade(btn.dataset.id);
+          self.showUpgradePanel(upgradeSystem, onClose);
+        };
+      });
+
+      var resetBtn = document.getElementById('upgrade-reset-btn');
+      if (resetBtn) {
+        resetBtn.onclick = function() {
+          if (confirm('确定要重置所有升级吗？已花费的点数将全部返还。')) {
+            upgradeSystem.reset();
+            self.showUpgradePanel(upgradeSystem, onClose);
+          }
+        };
+      }
+    }, 50);
+  }
+
+  /**
+   * 构建单个升级项的 HTML
+   * @param {string} id
+   * @param {object} def
+   * @param {UpgradeSystem} upgradeSystem
+   * @param {number} points
+   * @returns {string}
+   */
+  _buildUpgradeItem(id, def, upgradeSystem, points) {
+    const level = upgradeSystem.getLevel(id);
+    const isMaxed = level >= def.maxLevel;
+    const canAfford = points >= def.costPerLevel;
+    const canUpgrade = !isMaxed && canAfford;
+
+    const progressPct = (level / def.maxLevel) * 100;
+
+    var effectDesc = '';
+    if (id === 'initial_score') effectDesc = '初始积分: ' + (10 + level * 2);
+    else if (id === 'order_time') effectDesc = '倒计时: +' + (level * 10) + '%';
+    else if (id === 'emitter_speed') effectDesc = '冷却: -' + (level * 8) + '%';
+    else if (id === 'score_bonus') effectDesc = '积分: +' + (level * 5) + '%';
+    else if (id === 'item_capacity') effectDesc = '道具上限: +' + level;
+    else if (id === 'extra_boon_slots') effectDesc = '祝福槽: +' + level;
+    else if (id === 'start_gold') effectDesc = '初始金币: +' + (level === 1 ? 50 : level === 2 ? 100 : 200);
+    else if (id === 'extra_board') effectDesc = '棋盘: +2 格';
+    else if (id === 'permanent_cooldown') effectDesc = '冷却: -' + (level === 1 ? 5 : level === 2 ? 10 : 20) + '%';
+    else if (id === 'choose_from_4') effectDesc = '开局可选 4 个祝福';
+    else if (id === 'free_first_refresh') effectDesc = '每层首次刷新免费';
+    else if (id === 'carry_boon') effectDesc = '可携带祝福到下一局';
+    else if (id === 'unlock_hidden_element') effectDesc = '解锁暗影元素';
+
+    var bgColor = isMaxed ? 'rgba(76,175,80,0.12)' : 'rgba(255,255,255,0.03)';
+    var borderColor = isMaxed ? '#4caf50' : canUpgrade ? '#ffd700' : '#333';
+    var opacityVal = (isMaxed || canUpgrade) ? 1 : 0.5;
+    var barBg = isMaxed ? '#4caf50' : 'linear-gradient(90deg,#ffd700,#ff9800)';
+
+    var html = '<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; margin:6px 0; background:' + bgColor + '; border:1px solid ' + borderColor + '; border-radius:8px; opacity:' + opacityVal + ';">';
+    html += '<div style="flex:1;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+    html += '<span style="font-size:20px;">' + def.icon + '</span>';
+    html += '<span style="color:#fff;font-weight:bold;font-size:14px;">' + def.name + '</span>';
+    html += '<span style="color:#888;font-size:11px;">Lv.' + level + '/' + def.maxLevel + '</span></div>';
+    html += '<div style="color:#aaa;font-size:12px;margin-bottom:4px;">' + def.description + '</div>';
+    html += '<div style="color:#ffd700;font-size:11px;">' + effectDesc + '</div>';
+    html += '<div style="background:#333;height:4px;border-radius:2px;margin-top:4px;max-width:200px;">';
+    html += '<div style="background:' + barBg + ';height:4px;border-radius:2px;width:' + progressPct + '%;"></div></div></div>';
+    html += '<div>';
+    if (isMaxed) {
+      html += '<span style="color:#4caf50;font-weight:bold;font-size:13px;">V MAX</span>';
+    } else {
+      html += '<button class="upgrade-btn" data-id="' + id + '" style="padding:7px 16px; background:' + (canAfford ? 'linear-gradient(135deg,#ffd700,#ff9800)' : '#555') + '; color:' + (canAfford ? '#000' : '#999') + '; border:none; border-radius:6px; cursor:' + (canAfford ? 'pointer' : 'not-allowed') + '; font-size:12px; font-weight:bold; white-space:nowrap;" ' + (!canAfford ? 'disabled' : '') + '>^ ' + def.costPerLevel + ' 点</button>';
+    }
+    html += '</div></div>';
+    return html;
   }
 }

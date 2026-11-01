@@ -1,4 +1,47 @@
+## v57 (2026-11-01)
+
+### ✨ 新功能
+- **天赋树合并：旧星尘天赋内容已整合到新升级系统**：将旧 MetaProgress 中的 8 个功能天赋（祝福扩容、初始金币、棋盘扩张、永久加速、更多选择、首次免费、传承祝福、隐藏元素）作为新升级项添加到 UpgradeSystem 中，使用升级点数解锁。
+- **升级点数获取频率提升**：生存点数间隔从 30 秒缩短至 21 秒，订单点数门槛从 5 个降至 3 个。
+- **升级面板分页显示**：升级面板分为「数值成长」和「功能天赋」两个区域，清晰展示不同类型的升级项。
+
+### ♻️ 重构
+- **删除星尘经济体系**：彻底移除 MetaProgress 中的 stardust/trophy/shards 货币系统、TALENT_DEFS 天赋定义、unlockTalent/isTalentUnlocked/getActiveEffects 等方法。
+- **MetaProgress 精简为图鉴与统计系统**：仅保留 bestiary（图鉴）和 stats（统计）功能。
+- **GameEngine.js 集成新天赋效果**：在 startRogueLevel 中应用 permanentCooldown（永久加速）、extraBoardCells（棋盘扩张）、extraBoonSlots（祝福槽扩展）。
+- **RogueSystem.js 初始金币来源切换**：startGold 改为从 upgradeSystem.getActiveEffects() 获取。
+- **RogueUIManager.js 初始祝福选择来源切换**：choose_from_4 改为从 upgradeSystem.getActiveEffects() 获取。
+- **清理所有文件中的 stardust/trophy 残留引用**：涉及 GameEngine.js、RogueUIManager.js、UIManager.js、style.css。
+
+### 🐛 Bug 修复
+- **修复天赋树UI显示代码字段**：`showUpgradePanel` 方法中的 HTML 模板使用了反引号字面量但内部混用 `' + var + '` 拼接语法，导致变量未被解析、直接显示为代码文本。已全部改为纯字符串拼接。
+- **修复天赋树「返回」按钮未恢复主菜单**：`showUpgradePanel` 方法未接收 `onClose` 回调参数，返回按钮仅隐藏遮罩层未恢复主菜单内容。已添加 `onClose` 参数并在返回时调用。
+- 涉及：UIManager.js
+
+## v56 (2026-11-01)
+
+### 🐛 Bug 修复
+- **修复天赋树UI显示代码字段**：`showUpgradePanel` 方法中的 HTML 模板使用了反引号字面量但内部混用 `' + var + '` 拼接语法，导致变量未被解析、直接显示为代码文本。已全部改为纯字符串拼接。
+- **修复天赋树「返回」按钮未恢复主菜单**：`showUpgradePanel` 方法未接收 `onClose` 回调参数，返回按钮仅隐藏遮罩层未恢复主菜单内容。已添加 `onClose` 参数并在返回时调用。
+- 涉及：UIManager.js
+
 ## v55 (2026-11-01)
+
+### ✨ 新功能
+- **新增局外成长·天赋树系统（UpgradeSystem）**：每次游戏结束后根据表现获得升级点数，用于永久提升基础属性
+  - 新增 `js/systems/UpgradeSystem.js`，包含 5 种升级项：
+    - 初始积分（5级，每级+2，每级3点）
+    - 订单时间（5级，每级+10%倒计时，每级2点）
+    - 发射器速度（5级，每级-8%冷却，每级3点）
+    - 积分加成（5级，每级+5%订单积分，每级3点）
+    - 道具上限（3级，每级堆叠上限+1，每级4点）
+  - 升级点数获取：每存活30秒获得1点，每提交5个订单额外获得1点
+  - 支持免费重置所有升级，返还全部已花费点数
+  - localStorage 持久化存储
+- **主菜单新增「天赋树」入口**：点击可打开升级面板查看和管理升级项
+- **GameEngine.js 集成升级系统**：关卡开始时应用初始积分/发射器速度/订单时间加成，订单提交时应用积分加成，游戏结束/通关时发放升级点数
+- **OrderSystem.js 支持订单时间加成**：timeMultiplier 倍数影响订单倒计时
+- **ItemSystem.js 支持道具容量加成**：extraItemCapacity 增加道具堆叠上限
 
 ### 🐛 Bug 修复
 - **修复道具【立即完成】加分触发通关结算**：`_useInstantComplete` 中移除了加分逻辑，道具只清除订单不加分，避免意外通关
@@ -39,6 +82,12 @@
 - **调整 AutoPlaySystem 优先级**：从「提交 > 合成 > 发射器（饥饿保护）」改为「提交 > 合成 > 饥饿保护 > 发射器」，与用户要求一致
 - **修复元素风暴期间 AutoPlaySystem 优先级错误**：`_tryAutoSpawn` 在无订单时直接返回 false，导致风暴期间发射器不被点击。已改为风暴模式下跳过"无订单"检查，强制点击发射器
 - **修复游戏失败弹窗后自动合成仍在进行**：`_decisionLoop` 在 `isPlaying` 检查后才获取 `_processing` 锁，失败弹窗触发后当前迭代仍继续执行合成操作。已在 `try` 块开头增加 `isPlaying` 二次检查，确保游戏结束后立即停止所有操作
+- **修复升级系统效果从未生效**：`startRogueLevel` 中使用了 `this._upgradeEffects` 但构造函数中从未执行 `this._upgradeEffects = this.upgradeSystem.getActiveEffects()`，导致所有升级效果（初始积分/发射器速度/订单时间/积分加成/道具容量）均未生效。已在关卡开始时正确初始化
+- **修复初始积分升级未应用**：`startRogueLevel` 中 `this.state.score = 0` 后未应用升级系统的 `initialScore` 加成，已修复为在 `_upgradeEffects` 初始化后累加初始积分
+- **修复通关时未发放升级点数**：`_onLevelComplete` 中缺少升级点数发放逻辑，已添加（与 `_onGameOver` 相同的计算方式：每30秒1点+每5个订单1点）
+
+- **修复天赋树「返回」后游戏卡死**：点击天赋树的「返回」按钮只隐藏了遮罩层，未恢复主菜单内容，导致游戏界面停留在空白状态。已修复为返回时自动调用 `showMainMenu` 恢复主菜单弹窗
+
 ### 🛠 调试工具增强
 - **新增【道具】调试页签**：在 DebugTool 调试面板中添加「🎒 道具」页签，支持在游戏中直接添加任意道具（可选择道具类型和数量）、清空所有道具，方便测试
 

@@ -16,6 +16,7 @@
   let boonSystem = null;
   let eventSystem = null;
   let metaProgress = null;
+  let upgradeSystem = null;
   let rogueUIManager = null;
 
   /**
@@ -37,6 +38,8 @@
     boonSystem = new BoonSystem();
     eventSystem = new EventSystem();
     metaProgress = new MetaProgress();
+    upgradeSystem = new UpgradeSystem();
+    gameEngine.upgradeSystem = upgradeSystem;
     rogueSystem = new RogueSystem();
     rogueUIManager = new RogueUIManager();
 
@@ -119,7 +122,7 @@
       const bestiaryBtn = document.getElementById('menu-bestiary-btn');
 
       if (rogueBtn) rogueBtn.onclick = startRogueMode;
-      if (metaBtn) metaBtn.onclick = showTalentTree;
+      if (metaBtn) metaBtn.onclick = showUpgradePanel;
       if (bestiaryBtn) bestiaryBtn.onclick = showBestiary;
     }, 50);
   }
@@ -164,90 +167,10 @@
   }
 
   /** 显示天赋树 */
-  function showTalentTree() {
-    const modalBody = document.getElementById('modal-body');
-    const modalTitle = document.getElementById('modal-title');
-    const modalBtn = document.getElementById('modal-btn');
-
-    modalTitle.textContent = '🌟 天赋树 · 局外成长';
-    modalBtn.style.display = 'inline-block';
-    modalBtn.textContent = '返回';
-
-    const effects = metaProgress.getActiveEffects();
-    let talentsHtml = '';
-    const defs = MetaProgress.TALENT_DEFS;
-
-    for (const [id, def] of Object.entries(defs)) {
-      const unlocked = metaProgress.isTalentUnlocked(id);
-      const canUnlock = !unlocked && (
-        def.requires.every(r => metaProgress.isTalentUnlocked(r))
-      );
-      const resourceStr = def.type === 'stardust'
-        ? `✨ ${def.cost} 星尘`
-        : `🏆 ${def.cost} 奖杯`;
-      const hasResource = def.type === 'stardust'
-        ? metaProgress.getStardust() >= def.cost
-        : metaProgress.getTrophies() >= def.cost;
-
-      talentsHtml += `
-        <div style="
-          display:flex; align-items:center; justify-content:space-between;
-          padding:10px 14px; margin:6px 0;
-          background:${unlocked ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.03)'};
-          border:1px solid ${unlocked ? '#4caf50' : canUnlock ? '#ffd700' : '#333'};
-          border-radius:8px; opacity:${canUnlock || unlocked ? 1 : 0.5};
-        ">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:22px;">${def.icon}</span>
-            <div>
-              <div style="color:#fff;font-weight:bold;font-size:14px;">${def.name}</div>
-              <div style="color:#aaa;font-size:12px;">${def.description}</div>
-            </div>
-          </div>
-          <div>
-            ${unlocked ? '<span style="color:#4caf50;font-weight:bold;">✓ 已解锁</span>'
-              : `<button class="talent-unlock-btn" data-id="${id}" style="
-                  padding:6px 14px; background:${hasResource ? 'linear-gradient(135deg,#ffd700,#ff9800)' : '#555'};
-                  color:${hasResource ? '#000' : '#999'}; border:none; border-radius:6px;
-                  cursor:${hasResource ? 'pointer' : 'not-allowed'}; font-size:12px;
-                " ${!hasResource ? 'disabled' : ''}>${resourceStr}</button>`}
-          </div>
-        </div>
-      `;
+  function showUpgradePanel() {
+    if (uiManager && gameEngine && gameEngine.upgradeSystem) {
+      uiManager.showUpgradePanel(gameEngine.upgradeSystem, showMainMenu);
     }
-
-    modalBody.innerHTML = `
-      <div style="margin-bottom:12px; text-align:center; color:#aaa; font-size:13px;">
-        ✨ 星尘: <strong style="color:#ffd700;">${metaProgress.getStardust()}</strong>
-        &nbsp;&nbsp;|&nbsp;&nbsp;
-        🏆 奖杯: <strong style="color:#ffd700;">${metaProgress.getTrophies()}</strong>
-      </div>
-      <div style="max-height:55vh; overflow-y:auto; padding-right:4px;">
-        ${talentsHtml}
-      </div>
-    `;
-
-    // 给弹窗容器添加最大高度限制
-    const modal = document.getElementById('game-modal');
-    if (modal) modal.style.maxHeight = '80vh';
-
-    modalBtn.onclick = () => {
-      showMainMenu();
-    };
-
-    // 绑定解锁按钮
-    setTimeout(() => {
-      document.querySelectorAll('.talent-unlock-btn').forEach(btn => {
-        btn.onclick = () => {
-          const result = metaProgress.unlockTalent(btn.dataset.id);
-          if (result.success) {
-            showTalentTree(); // 刷新界面
-          } else {
-            alert(result.reason);
-          }
-        };
-      });
-    }, 50);
   }
 
   /** 显示图鉴 */

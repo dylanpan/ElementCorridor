@@ -500,7 +500,12 @@ class RogueUIManager {
         this.gameEngine.startRogueLevel(this.rogueSystem.getTargetScore(), node);
         break;
       case 'boon': {
-        const count = (this.metaProgress && this.metaProgress.isTalentUnlocked('choose_from_4')) ? 4 : 3;
+        // 应用升级系统：更多选择天赋
+    let count = 3;
+    if (this.gameEngine && this.gameEngine.upgradeSystem) {
+      const effects = this.gameEngine.upgradeSystem.getActiveEffects();
+      if (effects.initialBoonChoices > 0) count = effects.initialBoonChoices;
+    }
         const boons = this.boonSystem.pickRandomBoons(count);
         if (boons.length > 0) {
           window.eventBus.emit('rogue:show-boon-select', {
@@ -615,11 +620,8 @@ class RogueUIManager {
     const floorReached = state.currentFloor;
     const boonsCount = state.boons.length;
 
-    // 计算星尘奖励
-    let stardustReward = 0;
+    // 记录本局统计
     if (this.metaProgress) {
-      stardustReward = this.metaProgress.calculateStardustReward(floorReached, won, boonsCount);
-      this.metaProgress.addStardust(stardustReward);
       this.metaProgress.recordRun(won, floorReached, this.gameEngine ? this.gameEngine.state.score : 0);
     }
 
@@ -640,7 +642,7 @@ class RogueUIManager {
         <div>📊 到达层数: <strong style="color:#fff;">第 ${Math.min(floorReached, FLOOR_GENERATOR.maxFloor)} 层</strong></div>
         <div>🎯 最终得分: <strong style="color:#fff;">${this.gameEngine ? this.gameEngine.state.score : 0}</strong></div>
         <div>🔮 收集祝福: <strong style="color:#fff;">${boonsCount} 个</strong></div>
-        <div>✨ 获得星尘: <strong style="color:#ffd700;">+${stardustReward}</strong></div>
+
       </div>
       <div style="margin-top:20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button id="result-back-btn" style="
@@ -671,7 +673,12 @@ class RogueUIManager {
   // ==================== 初始祝福选择 ====================
 
   showInitialBoonSelect(onComplete) {
-    const count = (this.metaProgress && this.metaProgress.isTalentUnlocked('choose_from_4')) ? 4 : 3;
+    // 应用升级系统：更多选择天赋
+    let count = 3;
+    if (this.gameEngine && this.gameEngine.upgradeSystem) {
+      const effects = this.gameEngine.upgradeSystem.getActiveEffects();
+      if (effects.initialBoonChoices > 0) count = effects.initialBoonChoices;
+    }
     const boons = this.boonSystem.pickRandomBoons(count);
 
     window.eventBus.emit('rogue:show-boon-select', {

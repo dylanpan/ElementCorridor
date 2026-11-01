@@ -100,6 +100,8 @@ class GameEngine {
 
     // 道具系统
     this.itemSystem = new ItemSystem(this);
+    // 升级系统（局外成长）
+    this.upgradeSystem = new UpgradeSystem();
     // 双倍积分倍率（由道具系统设置）
     this._nextOrderMultiplier = 1;
 
@@ -548,6 +550,12 @@ class GameEngine {
 
     this._resetRatingData();
 
+    // 应用升级系统效果
+    this._upgradeEffects = this.upgradeSystem.getActiveEffects();
+    if (this._upgradeEffects && this._upgradeEffects.initialScore > 0) {
+      this.state.score += this._upgradeEffects.initialScore;
+    }
+
     // 重置道具风暴/冻结状态（防止延续到下一关）
     if (this.itemSystem) {
       this.itemSystem._stormEndTime = 0;
@@ -674,6 +682,11 @@ class GameEngine {
 
     }
 
+    // 应用升级系统：祝福槽扩展（天赋）
+    if (this._upgradeEffects && this._upgradeEffects.extraBoonSlots > 0 && this.boonSystem) {
+      this.boonSystem.maxBoons = ROGUE_DIFFICULTY.maxBoons + this._upgradeEffects.extraBoonSlots;
+    }
+
     // 初始化元素解锁状态（单一发射器模式）
     if (this.boonSystem) {
       this.boonSystem.initElementUnlocks();
@@ -685,6 +698,27 @@ class GameEngine {
 
       this.boonSystem.applyToEmitters(this.state.emitters);
 
+    }
+
+    // 应用升级系统：发射器速度
+    if (this._upgradeEffects && this._upgradeEffects.emitterCooldownReduction > 0) {
+      const reduction = this._upgradeEffects.emitterCooldownReduction;
+      for (const emitter of this.state.emitters) {
+        emitter.modifiers.cooldownMultiplier = Math.max(0.2, emitter.modifiers.cooldownMultiplier - reduction);
+      }
+    }
+
+    // 应用升级系统：永久加速（天赋）
+    if (this._upgradeEffects && this._upgradeEffects.permanentCooldown > 0) {
+      const reduction = this._upgradeEffects.permanentCooldown;
+      for (const emitter of this.state.emitters) {
+        emitter.modifiers.cooldownMultiplier = Math.max(0.2, emitter.modifiers.cooldownMultiplier - reduction);
+      }
+    }
+
+    // 应用升级系统：棋盘扩张（天赋）
+    if (this._upgradeEffects && this._upgradeEffects.extraBoardCells > 0) {
+      boardCols += this._upgradeEffects.extraBoardCells;
     }
 
     // 创建发射器按钮
@@ -723,6 +757,11 @@ class GameEngine {
     this.itemSystem.init();
 
     this.systems.order.init(levelConfig.maxOrders + (this.boonSystem ? this.boonSystem.getExtraOrderSlots() : 0), weights);
+
+    // 应用升级系统：订单时间加成
+    if (this._upgradeEffects && this._upgradeEffects.orderTimeMultiplier > 1) {
+      this.systems.order.timeMultiplier = this._upgradeEffects.orderTimeMultiplier;
+    }
 
     this.systems.order.fillOrders();
 
@@ -1970,7 +2009,7 @@ class GameEngine {
 
     // === 星尘奖励倍率 ===
 
-    const stardustMultiplier = gradeScore[overallGrade] / 3;
+    const ratingMultiplier = gradeScore[overallGrade] / 3;
 
     return {
 
@@ -2014,7 +2053,7 @@ class GameEngine {
 
       },
 
-      stardustMultiplier,
+      ratingMultiplier,
 
     };
 
@@ -6555,6 +6594,11 @@ class GameEngine {
 
     reward = Math.floor(reward);
 
+    // 应用升级系统积分加成
+    if (this._upgradeEffects && this._upgradeEffects.scoreMultiplier > 1) {
+      reward = Math.floor(reward * this._upgradeEffects.scoreMultiplier);
+    }
+
     // 应用紧急事件积分倍率
 
     reward = Math.floor(reward * this._eventCtx.scoreMultiplier);
@@ -6794,12 +6838,22 @@ class GameEngine {
     if (this._ultimates) {
       for (const u of this._ultimates) u.lastUsedTime = 0;
     }
+    // 计算本局获得的升级点数
+    const survivalTime = Date.now() - (this._levelStartTime || Date.now());
+    const survivalPoints = Math.floor(survivalTime / 21000);
+    const orderPoints = Math.floor(this._totalOrdersCompleted / 3);
+    const earnedPoints = survivalPoints + orderPoints;
+    if (earnedPoints > 0) {
+      this.upgradeSystem.addPoints(earnedPoints);
+    }
+
     window.eventBus.emit('game:over', {
       reason: reason,
       score: this.state.score,
       targetScore: this.state.targetScore,
       isRogue: this.isRogueMode,
       survived: false,
+      upgradePointsEarned: earnedPoints,
     });
   }
 
@@ -6840,6 +6894,15 @@ class GameEngine {
     // 重置订单连击状态
 
     this._resetCombo('complete');
+
+    // 计算本局获得的升级点数
+    const survivalTime = Date.now() - (this._levelStartTime || Date.now());
+    const survivalPoints = Math.floor(survivalTime / 30000);
+    const orderPoints = Math.floor(this._totalOrdersCompleted / 5);
+    const earnedPoints = survivalPoints + orderPoints;
+    if (earnedPoints > 0) {
+      this.upgradeSystem.addPoints(earnedPoints);
+    }
 
     // 重置怒气值
 

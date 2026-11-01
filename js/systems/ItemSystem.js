@@ -129,7 +129,8 @@ class ItemSystem {
     const def = ItemSystem.ITEM_DEFS[itemId];
     if (!def) return;
     const current = this.items[itemId] || 0;
-    this.items[itemId] = Math.min(current + count, def.maxStack);
+    const extraCap = this.engine && this.engine._upgradeEffects ? (this.engine._upgradeEffects.extraItemCapacity || 0) : 0;
+    this.items[itemId] = Math.min(current + count, def.maxStack + extraCap);
     window.eventBus.emit('items:updated', { items: this.getItemsAsArray() });
   }
 
