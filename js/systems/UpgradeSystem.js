@@ -95,6 +95,14 @@ class UpgradeSystem {
       maxLevel: 1, costPerLevel: 15, type: 'talent',
       effect: (level) => ({ hiddenElement: true }),
     },
+
+    // ===== 新增天赋 =====
+    auto_merge: {
+      id: 'auto_merge', name: '自动合成', icon: '🤖',
+      description: '解锁自动合成引擎，自动合成相邻元素并提交订单',
+      maxLevel: 1, costPerLevel: 5, type: 'talent',
+      effect: (level) => ({ autoMerge: true }),
+    },
   };
 
   constructor() {

@@ -470,6 +470,7 @@ class GameEngine {
     /** @type {number} 本关最高连击数 */
 
     this.autoPlay = null;
+    this._autoResumePending = false;
 
     /** @type {number} 本关最高合成等级 */
 
@@ -813,7 +814,15 @@ class GameEngine {
     if (!this.autoPlay) {
       this.autoPlay = new AutoPlaySystem(this);
     }
-    this.autoPlay.start();    // === 诅咒阶段：关卡开始效果 ===
+    this.autoPlay.start();
+
+    // 通知 UI 更新自动合成按钮状态
+    window.eventBus.emit('auto-play:state-changed', {
+      enabled: this.autoPlay && this.autoPlay.isRunning(),
+      paused: this.autoPlay ? this.autoPlay.isPaused() : false,
+    });
+
+    // === 诅咒阶段：关卡开始效果 ===
 
     if (this.boonSystem) {
 
@@ -4089,6 +4098,12 @@ class GameEngine {
 
     if (!this.state.isPlaying || this.state.isPaused) return;
 
+    // 手动操作时暂停自动合成，操作完成后恢复
+    if (this.autoPlay && !this.autoPlay.isPaused()) {
+      this.autoPlay.pause();
+      this._autoResumePending = true;
+    }
+
     // 紧急事件：冻结状态禁止发射器工作
 
     if (this._eventCtx.freezeEmitters) {
@@ -4292,6 +4307,12 @@ class GameEngine {
   _onCellClick(row, col) {
 
     if (!this.state.isPlaying || this.state.isPaused) return;
+
+    // 手动操作时暂停自动合成，操作完成后恢复
+    if (this.autoPlay && !this.autoPlay.isPaused()) {
+      this.autoPlay.pause();
+      this._autoResumePending = true;
+    }
 
     // === 冰霜女巫冻结行交互 ===
 
@@ -4977,6 +4998,13 @@ class GameEngine {
 
     this._checkEmergencyEvents();
 
+    // 操作完成后恢复自动合成
+    if (this._autoResumePending) {
+      this._autoResumePending = false;
+      setTimeout(() => {
+        if (this.autoPlay) this.autoPlay.resume();
+      }, 600);
+    }
   }
 
   /** 执行合成操作 */
@@ -6523,6 +6551,12 @@ class GameEngine {
 
     if (!this.state.isPlaying || this.state.isPaused) return;
 
+    // 手动操作时暂停自动合成，操作完成后恢复
+    if (this.autoPlay && !this.autoPlay.isPaused()) {
+      this.autoPlay.pause();
+      this._autoResumePending = true;
+    }
+
     // 提交前记录所有非空格子位置（用于后续飞入动画定位）
 
     const beforeSnapshot = [];
@@ -6724,6 +6758,13 @@ class GameEngine {
 
     this._checkEmergencyEvents();
 
+    // 操作完成后恢复自动合成
+    if (this._autoResumePending) {
+      this._autoResumePending = false;
+      setTimeout(() => {
+        if (this.autoPlay) this.autoPlay.resume();
+      }, 1800);
+    }
   }
 
   /** 尝试使用无属性元素提交订单（无属性元素可提交任意类型订单，但需高 1 级） */

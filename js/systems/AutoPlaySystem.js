@@ -3,6 +3,8 @@
  * 自动合成引擎（AutoPlaySystem）
  * 自动点击发射器产出元素、自动合成相邻同类型元素、自动提交匹配订单
  * 让玩家从繁琐的重复操作中解放出来，专注于策略决策
+ *
+ * 注意：自动合成为局外成长天赋，需通过升级点数解锁。
  * ============================================================
  */
 class AutoPlaySystem {
@@ -13,7 +15,9 @@ class AutoPlaySystem {
     this.engine = engine;
     this._intervalId = null;
     this._processing = false;
-    this._hungryCounter = 0; // 连续只合成不产元素的次数
+    this._paused = false;       // 手动暂停
+    this._enabled = false;      // 天赋是否已解锁
+    this._hungryCounter = 0;    // 连续只合成不产元素的次数
     this._stats = {
       submits: 0,
       merges: 0,
@@ -23,11 +27,25 @@ class AutoPlaySystem {
   }
 
   /**
+   * 检查自动合成天赋是否已解锁
+   * @returns {boolean}
+   */
+  _checkEnabled() {
+    if (this.engine && this.engine.upgradeSystem) {
+      const effects = this.engine.upgradeSystem.getActiveEffects();
+      return !!effects.autoMerge;
+    }
+    return false;
+  }
+
+  /**
    * 启动自动合成
    */
   start() {
+    this._enabled = this._checkEnabled();
+    if (!this._enabled) return; // 天赋未解锁，不启动
     if (this._intervalId) return;
-    this._intervalId = setInterval(() => this._decisionLoop(), 333);
+    this._intervalId = setInterval(() => this._decisionLoop(), 360);
   }
 
   /**
@@ -38,6 +56,45 @@ class AutoPlaySystem {
       clearInterval(this._intervalId);
       this._intervalId = null;
     }
+  }
+
+  /**
+   * 重启自动合成（用于天赋解锁后重新启动）
+   */
+  restart() {
+    this.stop();
+    this._paused = false;
+    this.start();
+  }
+
+  /**
+   * 暂停自动合成
+   */
+  pause() {
+    this._paused = true;
+  }
+
+  /**
+   * 恢复自动合成
+   */
+  resume() {
+    this._paused = false;
+  }
+
+  /**
+   * 是否已暂停
+   * @returns {boolean}
+   */
+  isPaused() {
+    return this._paused;
+  }
+
+  /**
+   * 自动合成是否已解锁并运行中
+   * @returns {boolean}
+   */
+  isRunning() {
+    return this._enabled && this._intervalId !== null;
   }
 
   /**
@@ -54,6 +111,7 @@ class AutoPlaySystem {
    */
   _decisionLoop() {
     if (!this.engine.state.isPlaying || this.engine.state.isPaused) return;
+    if (this._paused) return; // 手动暂停
     if (this._processing) return; // 防止重入
 
     this._processing = true;

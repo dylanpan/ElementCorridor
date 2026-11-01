@@ -40,6 +40,7 @@ class UIManager {
       'board-combo-display', 'board-combo-count-text',
       'board-combo-multiplier-text',
       'item-bar',
+      'auto-merge-toggle',
     ];
     for (const id of ids) {
       this.elements[id] = document.getElementById(id);
@@ -309,6 +310,19 @@ class UIManager {
     });
 
     // 按钮回调已由 showRatingPanel 直接处理，无需独立事件
+
+    // === 自动合成系统事件 ===
+    window.eventBus.on('auto-play:state-changed', (data) => {
+      this._updateAutoMergeButton(data.enabled, data.paused);
+    });
+
+    // 自动合成开关按钮点击
+    const toggleBtn = this.elements['auto-merge-toggle'];
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        this._toggleAutoMerge();
+      });
+    }
   }
 
   /**
@@ -2776,5 +2790,194 @@ class UIManager {
     }
     html += '</div></div>';
     return html;
+  }
+
+
+  // ==================== 自动合成系统 ====================
+
+  /**
+   * 更新自动合成按钮状态
+   * @param {boolean} enabled - 天赋是否已解锁
+   * @param {boolean} paused - 是否已暂停
+   */
+  _updateAutoMergeButton(enabled, paused) {
+    const btn = this.elements['auto-merge-toggle'];
+    if (!btn) return;
+    if (enabled) {
+      btn.style.display = 'inline-block';
+      if (paused) {
+        btn.textContent = '▶ 自动合成';
+        btn.classList.remove('auto-merge-active');
+        btn.classList.add('auto-merge-paused');
+        this._removeBreathingEffect();
+      } else {
+        btn.textContent = '⏸ 自动合成';
+        btn.classList.add('auto-merge-active');
+        btn.classList.remove('auto-merge-paused');
+        this._applyBreathingEffect();
+      }
+    } else {
+      btn.style.display = 'none';
+      this._removeBreathingEffect();
+    }
+  }
+
+  /**
+   * 切换自动合成暂停/恢复
+   */
+  _toggleAutoMerge() {
+    const engine = window.__gameEngine;
+    if (!engine || !engine.autoPlay) return;
+    if (engine.autoPlay.isPaused()) {
+      engine.autoPlay.resume();
+      this._updateAutoMergeButton(true, false);
+    } else {
+      engine.autoPlay.pause();
+      this._updateAutoMergeButton(true, true);
+    }
+  }
+
+  /**
+   * 应用棋盘呼吸光效
+   */
+  _applyBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.add('board-breathing');
+  }
+
+  /**
+   * 移除棋盘呼吸光效
+   */
+  _removeBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.remove('board-breathing');
+  }
+
+
+  // ==================== 自动合成系统 ====================
+
+  /**
+   * 更新自动合成按钮状态
+   * @param {boolean} enabled - 天赋是否已解锁
+   * @param {boolean} paused - 是否已暂停
+   */
+  _updateAutoMergeButton(enabled, paused) {
+    const btn = this.elements['auto-merge-toggle'];
+    if (!btn) return;
+    if (enabled) {
+      btn.style.display = 'inline-block';
+      if (paused) {
+        btn.textContent = '▶ 自动合成';
+        btn.classList.remove('auto-merge-active');
+        btn.classList.add('auto-merge-paused');
+        this._removeBreathingEffect();
+      } else {
+        btn.textContent = '⏸ 自动合成';
+        btn.classList.add('auto-merge-active');
+        btn.classList.remove('auto-merge-paused');
+        this._applyBreathingEffect();
+      }
+    } else {
+      btn.style.display = 'none';
+      this._removeBreathingEffect();
+    }
+  }
+
+  /**
+   * 切换自动合成暂停/恢复
+   */
+  _toggleAutoMerge() {
+    const engine = window.__gameEngine;
+    if (!engine || !engine.autoPlay) return;
+    if (engine.autoPlay.isPaused()) {
+      engine.autoPlay.resume();
+      this._updateAutoMergeButton(true, false);
+    } else {
+      engine.autoPlay.pause();
+      this._updateAutoMergeButton(true, true);
+    }
+  }
+
+  /**
+   * 应用棋盘呼吸光效
+   */
+  _applyBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.add('board-breathing');
+  }
+
+  /**
+   * 移除棋盘呼吸光效
+   */
+  _removeBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.remove('board-breathing');
+  }
+
+
+  // ==================== 自动合成系统 ====================
+
+  /**
+   * 更新自动合成按钮状态
+   * @param {boolean} enabled - 天赋是否已解锁
+   * @param {boolean} paused - 是否已暂停
+   */
+  _updateAutoMergeButton(enabled, paused) {
+    const btn = this.elements['auto-merge-toggle'];
+    if (!btn) return;
+    if (enabled) {
+      btn.style.display = 'inline-block';
+      if (paused) {
+        btn.textContent = '▶ 自动合成';
+        btn.classList.remove('auto-merge-active');
+        btn.classList.add('auto-merge-paused');
+        this._removeBreathingEffect();
+      } else {
+        btn.textContent = '⏸ 自动合成';
+        btn.classList.add('auto-merge-active');
+        btn.classList.remove('auto-merge-paused');
+        this._applyBreathingEffect();
+      }
+    } else {
+      btn.style.display = 'none';
+      this._removeBreathingEffect();
+    }
+  }
+
+  /**
+   * 切换自动合成暂停/恢复
+   */
+  _toggleAutoMerge() {
+    const engine = window.__gameEngine;
+    if (!engine || !engine.autoPlay) return;
+    if (engine.autoPlay.isPaused()) {
+      engine.autoPlay.resume();
+      this._updateAutoMergeButton(true, false);
+    } else {
+      engine.autoPlay.pause();
+      this._updateAutoMergeButton(true, true);
+    }
+  }
+
+  /**
+   * 应用棋盘呼吸光效
+   */
+  _applyBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.add('board-breathing');
+  }
+
+  /**
+   * 移除棋盘呼吸光效
+   */
+  _removeBreathingEffect() {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    board.classList.remove('board-breathing');
   }
 }

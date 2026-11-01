@@ -3843,3 +3843,41 @@ body {
   filter: brightness(1.05);
   transition: box-shadow 0.3s, border-color 0.3s;
 }
+
+
+/* ===== 自动合成按钮 ===== */
+.auto-merge-btn {
+  display: none;
+  padding: 6px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.auto-merge-btn:hover {
+  background: #1a4a7a;
+  border-color: var(--accent-blue);
+}
+.auto-merge-btn.auto-merge-active {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+}
+.auto-merge-btn.auto-merge-paused {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+/* ===== 棋盘呼吸光效（自动合成运行时） ===== */
+.game-board.board-breathing {
+  animation: boardBreath 2s ease-in-out infinite;
+  box-shadow: 0 0 480px rgba(76, 176, 81, 0.09), var(--shadow);
+}
+
+@keyframes boardBreath {
+  0%, 100% { box-shadow: 0 0 160px rgba(75, 174, 79, 0.04), var(--shadow); }
+  48% { box-shadow: 0 0 640px rgba(77, 177, 83, 0.07), var(--shadow); }
+}

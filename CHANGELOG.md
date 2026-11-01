@@ -1,3 +1,17 @@
+## v58 (2026-11-01)
+
+### ✨ 新功能
+- **手动干预模式实现**：玩家可随时暂停/恢复自动合成引擎，手动操作时自动暂停自动合成，操作完成后自动恢复（带延迟避免频繁启停）。
+- **自动合成变为局外成长天赋**：新增 `auto_merge` 天赋，需消耗 5 升级点数解锁。未解锁时自动合成不启动，玩家只能手动操作。
+- **自动合成开关按钮**：游戏顶部新增「⏸ 自动合成」按钮，解锁后显示，点击可随时暂停/恢复自动合成。
+- **棋盘呼吸光效**：自动合成运行时，棋盘边缘带有绿色呼吸光效提示，暂停时光效消失。
+
+### 🔧 技术改进
+- **AutoPlaySystem.js 重构**：新增 `pause()`/`resume()`/`isPaused()`/`isRunning()`/`restart()` 方法，`start()` 方法增加天赋检查，未解锁时不启动。
+- **GameEngine.js 手动操作自动暂停**：`_onCellClick`、`_onEmitterClick`、`_onOrderClicked` 手动操作时自动暂停自动合成，操作完成后延迟恢复。
+- **UIManager.js 新增自动合成UI**：新增 `_updateAutoMergeButton`、`_toggleAutoMerge`、`_applyBreathingEffect`、`_removeBreathingEffect` 方法。
+- **CSS 新增呼吸光效动画**：`boardBreath` 关键帧动画，`board-breathing` 类控制。
+
 ## v57 (2026-11-01)
 
 ### ✨ 新功能
