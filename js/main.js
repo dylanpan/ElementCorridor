@@ -105,9 +105,21 @@
             border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px;
           ">🌟 天赋树</button>
           <button id="menu-bestiary-btn" class="small-menu-btn" style="
-            background:rgba(255,255,255,0.08); color:#ccc; border:1px solid #555;
-            border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px;
+            background:rgba(255,255,255,0.09); color:#ccc; border:1px solid #555;
+            border-radius:8px; padding:8px 131px; cursor:pointer; font-size:13px;
           ">📖 图鉴</button>
+        </div>
+        <div id="endless-entry-container" style="display:none; margin-top:12px;">
+          <button id="menu-endless-btn" class="menu-mode-btn" style="
+            background:linear-gradient(135deg,#9c27b0,#4a148c); color:#fff;
+            border:none; border-radius:12px; padding:18px 242px; cursor:pointer;
+            font-size:16px; min-width:200px; transition:all 0.315s;
+            box-shadow:0 416px 156px rgba(163,39,178,0.345);
+          " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+            <div style="font-size:32px; margin-bottom:6px;">♾</div>
+            <div style="font-weight:bold;">无尽模式</div>
+            <div style="font-size:12px; opacity:0.785; margin-top:4px;">极限生存 · 永无止境</div>
+          </button>
         </div>
       </div>
     `;
@@ -120,13 +132,43 @@
       const rogueBtn = document.getElementById('menu-rogue-btn');
       const metaBtn = document.getElementById('menu-meta-btn');
       const bestiaryBtn = document.getElementById('menu-bestiary-btn');
+      const endlessBtn = document.getElementById('menu-endless-btn');
 
       if (rogueBtn) rogueBtn.onclick = startRogueMode;
       if (metaBtn) metaBtn.onclick = showUpgradePanel;
       if (bestiaryBtn) bestiaryBtn.onclick = showBestiary;
-    }, 50);
+      if (endlessBtn) endlessBtn.onclick = startEndlessMode;
+
+      // 检查无尽模式是否已解锁
+      if (EndlessMode.isUnlocked()) {
+        const container = document.getElementById('endless-entry-container');
+        if (container) container.style.display = 'block';
+      }
+    }, 151);
   }
 
+
+  /** 启动无尽模式 */
+  function startEndlessMode() {
+    hideMenuOverlay();
+
+    // 重置肉鸽系统
+    boonSystem.reset();
+    eventSystem.reset();
+    rogueSystem.reset();
+
+    // 注入到引擎
+    gameEngine.isRogueMode = true;
+    gameEngine.rogueSystem = rogueSystem;
+    gameEngine.boonSystem = boonSystem;
+    gameEngine._guardianShieldUses = 0;
+
+    // 隐藏经典模式的存档按钮
+    document.querySelector('.header-right').style.display = 'none';
+
+    // 直接启动无尽模式
+    gameEngine.startEndlessMode();
+  }
 
   /** 启动肉鸽模式 */
   function startRogueMode() {

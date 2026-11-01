@@ -50,6 +50,18 @@ class ItemSystem {
     this._initialized = false;
     this._freezeEndTime = 0;
     this._stormEndTime = 0;
+    this._enabled = false;
+  }
+
+  /**
+   * 设置启用状态
+   */
+  setEnabled(enabled) {
+    this._enabled = enabled;
+    const itemBar = document.getElementById('item-bar');
+    if (itemBar) {
+      itemBar.style.display = enabled ? 'flex' : 'none';
+    }
   }
 
   /**

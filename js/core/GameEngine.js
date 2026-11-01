@@ -107,6 +107,12 @@ class GameEngine {
     // 双倍积分倍率（由道具系统设置）
     this._nextOrderMultiplier = 1;
 
+    // 无尽模式
+    this.endlessMode = new EndlessMode(this);
+    this._endlessOrderTimeMultiplier = 1;
+    this._endlessQualityBonus = 0;
+    this._isEndlessMode = false;
+
     // ==================== 元素连锁反应状态 ====================
 
     /** @type {{ lastMergeTime: number, consecutiveCount: number, isStormActive: boolean }} */
@@ -525,6 +531,17 @@ class GameEngine {
 
    */
 
+  /**
+   * 启动无尽模式
+   */
+  startEndlessMode() {
+    this._isEndlessMode = true;
+    this.isRogueMode = true;
+    this.endlessMode.start();
+    // 使用极大目标分数启动游戏循环（永不达标）
+    this.startRogueLevel(999999, { type: 'endless', difficulty: 'normal' });
+  }
+
   startRogueLevel(targetScore, node) {
 
     this.isRogueMode = true;
@@ -757,6 +774,17 @@ class GameEngine {
 
       }
 
+    }
+
+    // 普通关卡：禁用无尽模式独占系统（道具 + 危机事件）
+    if (!this._isEndlessMode) {
+      if (this.itemSystem) {
+        this.itemSystem.setEnabled(false);
+        this.itemSystem.destroy();
+      }
+      if (this.crisisSystem) {
+        this.crisisSystem.setEnabled(false);
+      }
     }
 
     // 初始化道具系统
@@ -2377,6 +2405,11 @@ class GameEngine {
       if (this.crisisSystem) {
         this.crisisSystem.tick(Date.now());
         this.crisisSystem.update(Date.now());
+      }
+
+      // === 无尽模式 tick ===
+      if (this._isEndlessMode && this.endlessMode) {
+        this.endlessMode.tick(Date.now());
       }
 
       // === Boss 战 tick（约每秒检查4次） ===
@@ -6881,6 +6914,11 @@ class GameEngine {
     if (this.crisisSystem) {
       this.crisisSystem.setEnabled(false);
     }
+    // 无尽模式停止
+    if (this._isEndlessMode && this.endlessMode) {
+      this.endlessMode.stop();
+      this._isEndlessMode = false;
+    }
     if (this._comboTimeoutId) {
       clearTimeout(this._comboTimeoutId);
       this._comboTimeoutId = null;
@@ -6936,6 +6974,12 @@ class GameEngine {
 
     this._resetEventSystem();
 
+    // 无尽模式停止
+    if (this._isEndlessMode && this.endlessMode) {
+      this.endlessMode.stop();
+      this._isEndlessMode = false;
+    }
+
     // 清除连击超时，防止通关后 combo break 触发紧急事件
 
     if (this._comboTimeoutId) {
@@ -6976,6 +7020,12 @@ class GameEngine {
     if (this._bossState.isActive) {
 
       this._onBossVictory();
+
+      // 击败最终 Boss（创世之灵）解锁无尽模式
+      if (this._bossState.bossId === 'boss_creation_spirit') {
+        EndlessMode.unlock();
+        window.eventBus.emit('endless:unlocked', {});
+      }
 
     }
 

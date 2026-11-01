@@ -316,7 +316,20 @@ class UIManager {
       this._showCrisisBanner(data);
     });
     window.eventBus.on('crisis:ended', () => {
-      this._hideCrisisBanner();
+          });
+
+    // === 无尽模式事件 ===
+    window.eventBus.on('endless:started', (data) => {
+      this._onEndlessStarted(data);
+    });
+    window.eventBus.on('endless:level-up', (data) => {
+      this._onEndlessLevelUp(data);
+    });
+    window.eventBus.on('endless:unlocked', () => {
+      window.eventBus.emit('notification', {
+        message: '♾ 无尽模式已解锁！击败最终 Boss 后可在主菜单进入',
+        type: 'milestone',
+      });
     });
 
     // === 自动合成系统事件 ===
