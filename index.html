@@ -32,7 +32,7 @@
       <!-- 游戏信息 -->
       <section class="panel-section rogue-level-info" id="rogue-level-info" style="display:none;">
         <div class="version-row">
-          <span class="version-badge" id="game-version-badge">v60</span>
+          <span class="version-badge" id="game-version-badge">v61</span>
         </div>
         <div class="rogue-level-top">
           <span class="rogue-floor-badge" id="rogue-floor-btn" style="cursor:pointer;" title="点击查看历史路线图">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
@@ -122,6 +122,23 @@
       <div id="modal-body" class="modal-body"></div>
       <div class="modal-footer">
         <button id="modal-btn" class="modal-btn primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ====== 无尽模式开启对话框 ====== -->
+  <div id="endless-offer-dialog" class="dialog-overlay" style="display:none;">
+    <div class="dialog-box">
+      <h2>🌿 灵素回廊·无尽</h2>
+      <p>你已击败创世之灵，灵素之力仍在涌动……</p>
+      <p>开启无尽模式，挑战极限？</p>
+      <div class="endless-stats">
+        <span>当前积分：<strong id="endless-current-score">0</strong></span>
+      </div>
+      <div class="dialog-buttons">
+        <button id="btn-start-endless" class="btn-primary">开始无尽挑战</button>
+        <button id="btn-quit-endless" class="btn-secondary">返回主菜单</button>
       </div>
     </div>
   </div>

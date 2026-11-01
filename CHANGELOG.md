@@ -1,3 +1,17 @@
+## v61 (2026-11-02)
+
+### ✨ 新功能
+- **Boss 整合到无尽模式**：无尽模式下每存活 60 秒触发一波 Boss 攻击，5 个 Boss 按固定顺序循环（熔岩巨像→冰霜女巫→混沌之核→时间吞噬者→创世之灵），每轮循环强度 +20%（持续时间 +3 秒）。
+- **Boss 攻击效果**：熔岩巨像灼烧 2 个随机空格、冰霜女巫冻结随机 1 行、混沌之核随机 3 个元素等级 ±1、时间吞噬者加速订单倒计时 50%、创世之灵随机封印 1 个发射器。
+- **Boss 攻击预警 UI**：屏幕上方居中显示 Boss 攻击预警横幅，包含 Boss 图标、名称、描述和倒计时，攻击结束时自动消失。
+- **Boss 攻击叠加规则**：同一时间只有一个 Boss 攻击生效，与无尽模式每 30 秒的难度递增并行叠加，共同构成挑战。
+
+### 🔧 技术改进
+- **EndlessMode.js**：新增 BOSS_ATTACKS 静态配置（5 个 Boss 攻击效果定义）、_triggerBossAttack 方法、checkBossAttackExpiry 方法、_bossCycle/_lastBossTime/_activeBossAttack 属性。
+- **GameEngine.js**：startEndlessMode 中重置 Boss 状态（含 timeAcceleration/sealedEmitterId），游戏循环中调用 checkBossAttackExpiry。
+- **UIManager.js**：新增 boss-attack:started/ended 事件监听、_showBossWarning/_hideBossWarning 方法。
+- **index.html**：新增无尽模式开启对话框（id=endless-offer-dialog）。
+
 ## v60 (2026-11-01)
 
 ### ✨ 新功能

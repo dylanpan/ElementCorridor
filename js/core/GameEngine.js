@@ -537,6 +537,41 @@ class GameEngine {
   startEndlessMode() {
     this._isEndlessMode = true;
     this.isRogueMode = true;
+    // 重置 Boss 状态
+    this._bossState = {
+      isActive: false,
+      bossId: null,
+      lastTickTime: 0,
+      scorchedCells: [],
+      lastScorchTime: 0,
+      lastSpreadTime: 0,
+      isRageActive: false,
+      frozenRows: new Set(),
+      _freezeRowTimeouts: {},
+      lastFreezeTime: 0,
+      thawMergeCount: 0,
+      isBlizzardActive: false,
+      blizzardEndTime: 0,
+      chaosElements: [],
+      lastWaveTime: 0,
+      lastChaosSpawnTime: 0,
+      lastRefreshTime: 0,
+      devourTimer: 0,
+      lastDevourTime: 0,
+      timeLimit: 90000,
+      levelStartTime: Date.now(),
+      devouredCells: new Set(),
+      sealedBoons: [],
+      mirrors: [],
+      lastUnsealTime: 0,
+      lastMirrorTime: 0,
+      unsealOrder: [],
+      tempUnsealedBoon: null,
+      tempUnsealExpireAt: 0,
+      tempUnsealBoonObj: null,
+      timeAcceleration: 1,
+      sealedEmitterId: null,
+    };
     this.endlessMode.start();
     // 使用极大目标分数启动游戏循环（永不达标）
     this.startRogueLevel(999999, { type: 'endless', difficulty: 'normal' });
@@ -2407,9 +2442,10 @@ class GameEngine {
         this.crisisSystem.update(Date.now());
       }
 
-      // === 无尽模式 tick ===
+      // === 无尽模式 tick（含 Boss 攻击调度） ===
       if (this._isEndlessMode && this.endlessMode) {
         this.endlessMode.tick(Date.now());
+        this.endlessMode.checkBossAttackExpiry(Date.now());
       }
 
       // === Boss 战 tick（约每秒检查4次） ===

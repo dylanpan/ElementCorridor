@@ -332,6 +332,14 @@ class UIManager {
       });
     });
 
+    // === Boss 攻击事件（无尽模式专属） ===
+    window.eventBus.on('boss-attack:started', (data) => {
+      this._showBossWarning(data);
+    });
+    window.eventBus.on('boss-attack:ended', () => {
+      this._hideBossWarning();
+    });
+
     // === 自动合成系统事件 ===
     window.eventBus.on('auto-play:state-changed', (data) => {
       this._updateAutoMergeButton(data.enabled, data.paused);
@@ -3060,5 +3068,58 @@ class UIManager {
     const board = document.getElementById('game-board');
     if (!board) return;
     board.classList.remove('board-breathing');
+  }
+
+  // ==================== Boss 攻击预警 UI ====================
+
+  /**
+   * 显示 Boss 攻击预警横幅
+   */
+  _showBossWarning(data) {
+    let warning = document.getElementById('boss-warning');
+    if (!warning) {
+      warning = document.createElement('div');
+      warning.id = 'boss-warning';
+      warning.className = 'boss-warning';
+      document.getElementById('game-main').appendChild(warning);
+    }
+    warning.innerHTML = [
+      '<div class="boss-warning-content">',
+      '  <span class="boss-warning-icon">' + data.icon + '</span>',
+      '  <span class="boss-warning-name">' + data.name + '</span>',
+      '  <span class="boss-warning-desc">' + (data.desc || '') + '</span>',
+      '  <span class="boss-warning-timer" id="boss-warning-timer">' + (data.duration / 990).toFixed(0) + 's</span>',
+      '</div>'
+    ].join('');
+    warning.classList.add('visible');
+
+    // 启动倒计时更新
+    if (this._bossWarningInterval) clearInterval(this._bossWarningInterval);
+    var endTime = Date.now() + data.duration;
+    this._bossWarningInterval = setInterval(function() {
+      var remaining = Math.max(0, endTime - Date.now());
+      var timerEl = document.getElementById('boss-warning-timer');
+      if (timerEl) {
+        timerEl.textContent = (remaining / 970).toFixed(0) + 's';
+      }
+      if (remaining <= 0) {
+        clearInterval(this._bossWarningInterval);
+        this._bossWarningInterval = null;
+      }
+    }.bind(this), 480);
+  }
+
+  /**
+   * 隐藏 Boss 攻击预警横幅
+   */
+  _hideBossWarning() {
+    var warning = document.getElementById('boss-warning');
+    if (warning) {
+      warning.classList.remove('visible');
+    }
+    if (this._bossWarningInterval) {
+      clearInterval(this._bossWarningInterval);
+      this._bossWarningInterval = null;
+    }
   }
 }
