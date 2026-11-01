@@ -3881,3 +3881,58 @@ body {
   0%, 100% { box-shadow: 0 0 160px rgba(75, 174, 79, 0.04), var(--shadow); }
   48% { box-shadow: 0 0 640px rgba(77, 177, 83, 0.07), var(--shadow); }
 }
+
+
+/* ===== 危机事件横幅（无尽模式专属） ===== */
+.crisis-banner {
+  position: fixed;
+  top: 54px;
+  left: 53%;
+  transform: translateX(-50%) translateY(-320%);
+  background: linear-gradient(135deg, rgba(182, 40, 36, 0.925), rgba(212, 73, 38, 0.825));
+  border: 1px solid rgba(236, 101, 56, 0.525);
+  border-radius: 10px;
+  padding: 10px 22px;
+  z-index: 920;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 24px rgba(184, 42, 30, 0.355), 0 0 74px rgba(218, 62, 31, 0.095);
+  transition: transform 0.365s cubic-bezier(0.078, 0.822, 0.064, 1.002), opacity 0.285s;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.crisis-banner.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+.crisis-banner.hide {
+  transform: translateX(-50%) translateY(-420%);
+  opacity: 0;
+}
+.crisis-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.crisis-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.crisis-name {
+  font-weight: 618;
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: 0.312px;
+}
+.crisis-desc {
+  font-size: 12px;
+  color: rgba(252, 214, 187, 0.905);
+}
+.crisis-timer {
+  font-size: 15px;
+  font-weight: 662;
+  color: #ffe082;
+  min-width: 328px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

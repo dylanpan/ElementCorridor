@@ -100,6 +100,8 @@ class GameEngine {
 
     // 道具系统
     this.itemSystem = new ItemSystem(this);
+    // 危机事件系统（无尽模式专属）
+    this.crisisSystem = new CrisisSystem(this);
     // 升级系统（局外成长）
     this.upgradeSystem = new UpgradeSystem();
     // 双倍积分倍率（由道具系统设置）
@@ -546,6 +548,9 @@ class GameEngine {
     // 重置紧急事件系统
 
     this._resetEventSystem();
+
+    // 重置危机事件系统
+    this.crisisSystem.reset();
 
     // 重置评分数据
 
@@ -2366,6 +2371,12 @@ class GameEngine {
 
         this._lastTickTime = timestamp;
 
+      }
+
+      // === 危机事件 tick（无尽模式专属） ===
+      if (this.crisisSystem) {
+        this.crisisSystem.tick(Date.now());
+        this.crisisSystem.update(Date.now());
       }
 
       // === Boss 战 tick（约每秒检查4次） ===
@@ -6867,6 +6878,9 @@ class GameEngine {
       this._endActiveEvent();
     }
     this._resetEventSystem();
+    if (this.crisisSystem) {
+      this.crisisSystem.setEnabled(false);
+    }
     if (this._comboTimeoutId) {
       clearTimeout(this._comboTimeoutId);
       this._comboTimeoutId = null;

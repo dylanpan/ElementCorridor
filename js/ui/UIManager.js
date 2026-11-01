@@ -311,6 +311,14 @@ class UIManager {
 
     // 按钮回调已由 showRatingPanel 直接处理，无需独立事件
 
+    // === 危机事件系统事件（无尽模式专属） ===
+    window.eventBus.on('crisis:started', (data) => {
+      this._showCrisisBanner(data);
+    });
+    window.eventBus.on('crisis:ended', () => {
+      this._hideCrisisBanner();
+    });
+
     // === 自动合成系统事件 ===
     window.eventBus.on('auto-play:state-changed', (data) => {
       this._updateAutoMergeButton(data.enabled, data.paused);
@@ -1497,6 +1505,66 @@ class UIManager {
   }
   hideEventBanner() {
     const container = document.getElementById('event-banner-container');
+    if (!container) return;
+
+    container.classList.remove('show');
+    container.classList.add('hide');
+
+    setTimeout(() => {
+      if (container.parentNode) container.parentNode.removeChild(container);
+    }, 500);
+  }
+
+  /**
+   * 显示危机事件横幅（无尽模式专属）
+   * @param {object} data - { id, name, icon, description, duration }
+   */
+  _showCrisisBanner(data) {
+    const oldContainer = document.getElementById('crisis-banner-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+
+    const container = document.createElement('div');
+    container.id = 'crisis-banner-container';
+    container.className = 'crisis-banner';
+    container.innerHTML = `
+      <div class="crisis-banner-inner">
+        <span class="crisis-icon">${data.icon}</span>
+        <span class="crisis-name">${data.name}</span>
+        <span class="crisis-desc">${data.description}</span>
+        <span class="crisis-timer" id="crisis-timer-text">${(data.duration / 1000).toFixed(0)}s</span>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+
+    // 滑入动画
+    requestAnimationFrame(() => {
+      container.classList.add('show');
+    });
+
+    // 倒计时更新
+    if (data.duration > 0) {
+      const endTime = Date.now() + data.duration;
+      this._crisisTimerId = setInterval(() => {
+        const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+        const timerEl = document.getElementById('crisis-timer-text');
+        if (timerEl) timerEl.textContent = remaining + 's';
+        if (remaining <= 0) clearInterval(this._crisisTimerId);
+      }, 500);
+    }
+  }
+
+  /**
+   * 隐藏危机事件横幅
+   */
+  _hideCrisisBanner() {
+    if (this._crisisTimerId) {
+      clearInterval(this._crisisTimerId);
+      this._crisisTimerId = null;
+    }
+    const container = document.getElementById('crisis-banner-container');
     if (!container) return;
 
     container.classList.remove('show');
