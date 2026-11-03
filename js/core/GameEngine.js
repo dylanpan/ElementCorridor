@@ -589,7 +589,9 @@ class GameEngine {
 
     this.state.targetScore = targetScore;
 
-    this.state.score = 0;
+    // 仅第一层第一关提供初始积分
+    const isFirstFloorFirstNode = this.rogueSystem && this.rogueSystem.getCurrentFloor() === 1 && this.rogueSystem.state.currentNodeIndex === 0;
+    this.state.score = isFirstFloorFirstNode ? GAME_SETTINGS.initialScore : 0;
 
     this.state.isPlaying = true;
 
@@ -824,6 +826,11 @@ class GameEngine {
 
     // 初始化道具系统
     this.itemSystem.init();
+    // 非无尽模式隐藏整个道具栏（包括标题）
+    if (!this._isEndlessMode) {
+      const itemSection = document.getElementById('item-section');
+      if (itemSection) itemSection.style.display = 'none';
+    }
 
     this.systems.order.init(levelConfig.maxOrders + (this.boonSystem ? this.boonSystem.getExtraOrderSlots() : 0), weights);
 
@@ -2153,154 +2160,7 @@ class GameEngine {
     this.boardRenderer.renderAll(this.state.board);
 
   }
-
-  startLevel(level) {
-
-    const levelConfig = LEVEL_CONFIGS.find((c) => c.level === level);
-
-    if (!levelConfig) {
-
-      console.error(`关卡 ${level} 不存在`);
-
-      return;
-
-    }
-
-    // 重置为经典模式（防止之前肉鸽模式的 isRogueMode 污染）
-
-    this.isRogueMode = false;
-
-    this.currentRogueNode = null;
-
-    this.state.level = level;
-
-    this.state.targetScore = levelConfig.targetScore;
-
-    this.state.score = 0;
-
-    this.state.isPlaying = true;
-
-    this.state.isPaused = false;
-
-    this.state.levelConfig = levelConfig;
-
-    // 重置紧急事件系统
-
-    this._resetEventSystem();
-
-    // 重置评分数据
-
-    this._resetRatingData();
-
-    // 重置道具风暴/冻结状态（防止延续到下一关）
-    if (this.itemSystem) {
-      this.itemSystem._stormEndTime = 0;
-      this.itemSystem._freezeEndTime = 0;
-    }
-
-    // 清除连击超时
-
-    if (this._comboTimeoutId) {
-
-      clearTimeout(this._comboTimeoutId);
-
-      this._comboTimeoutId = null;
-
-    }
-
-    // 初始化棋盘
-
-    const { boardCols, boardRows } = levelConfig;
-
-    this.state.board = Array.from({ length: boardRows }, () =>
-
-      Array.from({ length: boardCols }, () => null)
-
-    );
-
-    // 初始化产出系统
-
-    this.systems.spawn = new SpawnSystem(boardCols, boardRows);
-
-    // 初始化棋盘渲染
-
-    this.boardRenderer.init(boardCols, boardRows);
-
-    this.boardRenderer.renderAll(this.state.board);
-
-    // 初始化发射器
-
-    this.state.emitters = levelConfig.availableEmitters.map((id) => {
-
-      const config = EMITTER_CONFIGS.find((c) => c.id === id);
-
-      return config ? new Emitter(config) : null;
-
-    }).filter(Boolean);
-
-    // 保存发射器初始修饰器（用于祝福封印时还原）
-
-    this.state.emitterBaseModifiers = this.state.emitters.map(e => JSON.parse(JSON.stringify(e.modifiers)));
-
-    // 应用祝福到发射器（如果有肉鸽祝福系统）
-
-    if (this.boonSystem) {
-
-      this.boonSystem.applyToEmitters(this.state.emitters);
-
-    }
-
-    // 创建发射器按钮
-
-    this.uiManager.createEmitterButtons(this.state.emitters, (emitterId) => {
-
-      this._onEmitterClick(emitterId);
-
-    });
-
-    // 初始化订单系统
-
-    this.systems.order.init(levelConfig.maxOrders, levelConfig.orderDifficultyWeights);
-
-    this.systems.order.fillOrders();
-
-    // 重置合成系统连击
-
-    this.systems.merge.resetCombo();
-
-    // 更新UI
-
-    window.eventBus.emit('score:updated', {
-
-      score: this.state.score,
-
-      targetScore: this.state.targetScore,
-
-    });
-
-    window.eventBus.emit('level:loaded', levelConfig);
-
-    // 启动游戏循环
-
-    this._startGameLoop();
-
-    // 启动自动存档
-
-    this._startAutoSave();
-
-    // 初始化波次系统（肉鸽模式使用当前层数）
-
-    const floor = this.rogueSystem ? this.rogueSystem.getCurrentFloor() : 1;
-
-    this._initWaves(floor);
-
-    // 隐藏弹窗
-
-    this.uiManager.hideModal();
-
-  }
-
-  /** 启动游戏循环（用于更新发射器冷却等） */
+/** 启动游戏循环（用于更新发射器冷却等） */
 
   _startGameLoop() {
 
@@ -7125,7 +6985,6 @@ class GameEngine {
 
   }
 
-  // ==================== 存档管理 ====================
 
   /** 序列化完整游戏状态 */
 
@@ -7164,167 +7023,9 @@ class GameEngine {
 
   }
 
-  /** 从存档恢复 */
 
-  loadFromSave(saveData) {
 
-    if (!saveData || !saveData.version) return false;
-
-    const levelConfig = saveData.levelConfig || LEVEL_CONFIGS[0];
-
-    const { boardCols, boardRows } = levelConfig;
-
-    this.state.level = saveData.level;
-
-    this.state.score = saveData.score;
-
-    this.state.targetScore = saveData.targetScore;
-
-    this.state.isPlaying = true;
-
-    this.state.levelConfig = levelConfig;
-
-    // 恢复棋盘
-
-    this.state.board = saveData.board.map((row) =>
-
-      row.map((data) => (data ? Element.deserialize(data) : null))
-
-    );
-
-    // 初始化系统
-
-    this.systems.spawn = new SpawnSystem(boardCols, boardRows);
-
-    this.systems.merge = MergeSystem.deserialize(saveData.mergeSystem);
-
-    this.systems.order = OrderSystem.deserialize(saveData.orderSystem);
-
-    // 恢复发射器
-
-    this.state.emitters = saveData.emitters.map((data) => Emitter.deserialize(data)).filter(Boolean);
-
-    // 渲染
-
-    this.boardRenderer.init(boardCols, boardRows);
-
-    this.boardRenderer.renderAll(this.state.board);
-
-    // 创建发射器按钮
-
-    this.uiManager.createEmitterButtons(this.state.emitters, (emitterId) => {
-
-      this._onEmitterClick(emitterId);
-
-    });
-
-    // 更新UI
-
-    window.eventBus.emit('score:updated', {
-
-      score: this.state.score,
-
-      targetScore: this.state.targetScore,
-
-    });
-
-    window.eventBus.emit('level:loaded', levelConfig);
-
-    window.eventBus.emit('orders:updated', this.systems.order.getOrders());
-
-    // 启动循环和存档
-
-    this._startGameLoop();
-
-    this._startAutoSave();
-
-    this.uiManager.hideModal();
-
-    // 创建怒气条（读档恢复时也需要）
-
-    if (this.isRogueMode) {
-
-      if (this.uiManager.createRageBar) {
-
-        this.uiManager.createRageBar(this._ultimates);
-
-      }
-
-      // 重置怒气
-
-      this._rageValue = 0;
-
-      // 重置所有大招冷却
-
-      if (this._ultimates) {
-
-        for (const u of this._ultimates) u.lastUsedTime = 0;
-
-      }
-
-      window.eventBus.emit('rage:updated', { value: 0, max: 100 });
-
-    }
-
-    return true;
-
-  }
-
-  /** 手动保存 */
-
-  save() {
-
-    const success = StorageManager.save(this.serialize());
-
-    if (success) {
-
-      window.eventBus.emit('notification', {
-
-        message: '游戏已保存',
-
-        type: 'info',
-
-      });
-
-    }
-
-    return success;
-
-  }
-
-  /** 手动读取存档 */
-
-  load() {
-
-    const data = StorageManager.load();
-
-    if (!data) {
-
-      window.eventBus.emit('notification', {
-
-        message: '没有找到存档',
-
-        type: 'warning',
-
-      });
-
-      return false;
-
-    }
-
-    return this.loadFromSave(data);
-
-  }
-
-  /** 检查是否有存档 */
-
-  hasSave() {
-
-    return StorageManager.hasSave();
-
-  }
-
-  /** 销毁引擎 */
+/** 销毁引擎 */
 
   destroy() {
 

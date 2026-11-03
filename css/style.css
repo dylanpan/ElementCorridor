@@ -3355,6 +3355,23 @@ body {
   padding: 14px 18px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* 辅助线开关按钮 */
+.debug-overlay-toggle {
+  background: transparent;
+  border: 1px solid #666;
+  color: #ccc;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+  margin-right: auto;
+  margin-left: 12px;
+}
+.debug-overlay-toggle:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: #999;
+}
 .debug-title {
   font-size: 1rem;
   font-weight: 700;
@@ -4522,20 +4539,20 @@ body {
 }
 
 
-/* ====== 调试标记 ====== */
-#game-main {
+/* ====== UI辅助线调试（默认隐藏，通过 .debug-overlays 切换） ====== */
+.debug-overlays #game-main {
   outline: 3px dashed #ff6600;
   outline-offset: -1px;
 }
-#left-panel {
+.debug-overlays #left-panel {
   outline: 2px solid #00aaff;
 }
-#board-container {
+.debug-overlays #board-container {
   outline: 3px solid #ff00ff;
 }
-#right-panel {
+.debug-overlays #right-panel {
   outline: 2px solid #00cc66;
 }
-.game-board {
+.debug-overlays .game-board {
   outline: 2px dashed #ff0000;
 }

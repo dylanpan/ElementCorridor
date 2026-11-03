@@ -117,7 +117,7 @@ const ORDER_TEMPLATES = [
 ];
 
 // ==================== 关卡配置 ====================
-// 每关的目标分数、可用发射器、最大订单数等
+// 关卡配置（startRogueLevel 使用第一关配置作为基础）
 const LEVEL_CONFIGS = [
   {
     level: 1,
@@ -126,7 +126,7 @@ const LEVEL_CONFIGS = [
     boardCols: 6,
     boardRows: 4,
     availableEmitters: ['emitter_fire', 'emitter_water', 'emitter_earth'],
-    orderDifficultyWeights: { easy: 30, medium: 45, hard: 15, rare: 10 },
+    orderDifficultyWeights: { easy: 60, medium: 30, hard: 10, rare: 0 },
     title: '初识元素',
     description: '掌握基础元素的合成与提交',
   },
@@ -137,7 +137,7 @@ const LEVEL_CONFIGS = [
     boardCols: 7,
     boardRows: 4,
     availableEmitters: ['emitter_fire', 'emitter_water', 'emitter_earth', 'emitter_air'],
-    orderDifficultyWeights: { easy: 15, medium: 35, hard: 35, rare: 15 },
+    orderDifficultyWeights: { easy: 30, medium: 40, hard: 25, rare: 5 },
     title: '风之觉醒',
     description: '引入微风元素，挑战更复杂的合成',
   },
@@ -162,6 +162,7 @@ const GAME_SETTINGS = {
   maxBoardCells: 48,             // 棋盘最大格子数
   orderRefreshCost: 20,          // 刷新订单消耗积分
   comboBonusMultiplier: 0.5,     // 连击奖励倍率
+  initialScore: 10,              // 初始积分（仅第一关生效）
 };
 // ==================== 波次模板配置 ====================
 // 每关拆分为多个小波次，按难度 tier 分层定义

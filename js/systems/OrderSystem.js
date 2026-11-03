@@ -9,7 +9,7 @@ class OrderSystem {
     common: {
       label: '普通',
       color: '#9e9e9e',
-      timeMultiplier: 0.8,
+      timeMultiplier: 0.9,
       rewardMultiplier: 1.0,
       weight: 450,
       icon: '⬜',
@@ -204,12 +204,12 @@ class OrderSystem {
    */
   _getTimeLimit(level) {
     const limits = {
-      2: 20000,     // 普通
-      3: 27500,     // 稀有
-      4: 37000,     // 史诗
-      5: 43000,     // 传说
+      2: 45000,     // 普通 - 45秒
+      3: 55000,     // 稀有 - 55秒
+      4: 65000,     // 史诗 - 65秒
+      5: 75000,     // 传说 - 75秒
     };
-    return limits[level] || 25000;
+    return limits[level] || 50000;
   }
 
   /**

@@ -10,6 +10,14 @@
 
   let _overlay = null;
   let _activeTab = 'boons';
+  let _debugOverlaysEnabled = false;
+
+  /** 切换 UI 辅助线显示/隐藏 */
+  function toggleDebugOverlays() {
+    _debugOverlaysEnabled = !_debugOverlaysEnabled;
+    document.documentElement.classList.toggle('debug-overlays', _debugOverlaysEnabled);
+    return _debugOverlaysEnabled;
+  }
 
   /** 初始化调试工具 */
   function init() {
@@ -55,9 +63,25 @@
     header.className = 'debug-header';
     header.innerHTML = `
       <span class="debug-title">🔧 调试工具</span>
-      <span class="debug-close" title="关闭">✕</span>
+      <button class="debug-overlay-toggle" title="切换UI辅助线（边框标记）">📐 辅助线</button>
+    <span class="debug-close" title="关闭">✕</span>
     `;
     header.querySelector('.debug-close').addEventListener('click', hideDebugPanel);
+
+    // 辅助线开关
+    const overlayToggle = header.querySelector('.debug-overlay-toggle');
+    overlayToggle.addEventListener('click', () => {
+      const enabled = toggleDebugOverlays();
+      overlayToggle.textContent = enabled ? '✅ 辅助线' : '📐 辅助线';
+      overlayToggle.style.background = enabled ? 'rgba(76,175,80,0.3)' : '';
+      overlayToggle.style.borderColor = enabled ? '#4caf50' : '#666';
+    });
+    // 初始状态同步
+    if (_debugOverlaysEnabled) {
+      overlayToggle.textContent = '✅ 辅助线';
+      overlayToggle.style.background = 'rgba(76,175,80,0.3)';
+      overlayToggle.style.borderColor = '#4caf50';
+    }
 
     // 标签栏
     const tabs = document.createElement('div');

@@ -64,11 +64,6 @@
       updateBoardScoreDisplay(data.score, data.targetScore);
     });
 
-    // 监听评级面板的下一关按钮
-    window.eventBus.on('ui:start-level', (level) => {
-      gameEngine.startLevel(level);
-    });
-
     // 显示主菜单
     showMainMenu();
   }
@@ -161,9 +156,6 @@
     gameEngine.boonSystem = boonSystem;
     gameEngine._guardianShieldUses = 0;
 
-    // 隐藏经典模式的存档按钮
-    document.querySelector('.header-right').style.display = 'none';
-
     // 直接启动无尽模式
     gameEngine.startEndlessMode();
   }
@@ -182,9 +174,6 @@
     gameEngine.rogueSystem = rogueSystem;
     gameEngine.boonSystem = boonSystem;
     gameEngine._guardianShieldUses = 0;
-
-    // 隐藏经典模式的存档按钮
-    document.querySelector('.header-right').style.display = 'none';
 
     // 先选初始祝福
     rogueUIManager.showInitialBoonSelect(() => {
@@ -348,10 +337,7 @@
 
   /** 显示肉鸽模式左侧面板 */
   function showRogueStatusBar() {
-    // 切换左侧面板：隐藏经典关卡信息，显示肉鸽信息
-    const classicInfo = document.getElementById('classic-level-info');
     const rogueInfo = document.getElementById('rogue-level-info');
-    if (classicInfo) classicInfo.style.display = 'none';
     if (rogueInfo) rogueInfo.style.display = 'flex';
     // 隐藏顶部标题
     const headerLeft = document.querySelector('.header-left');
@@ -360,10 +346,7 @@
 
   /** 隐藏肉鸽模式左侧面板 */
   function hideRogueStatusBar() {
-    // 恢复左侧面板：显示经典关卡信息，隐藏肉鸽信息
-    const classicInfo = document.getElementById('classic-level-info');
     const rogueInfo = document.getElementById('rogue-level-info');
-    if (classicInfo) classicInfo.style.display = 'block';
     if (rogueInfo) rogueInfo.style.display = 'none';
     // 恢复顶部标题
     const headerLeft = document.querySelector('.header-left');
@@ -629,32 +612,6 @@
    * 设置界面按钮事件
    */
   function setupButtons() {
-    const newGameBtn = document.getElementById('new-game-btn');
-    if (newGameBtn) {
-      newGameBtn.addEventListener('click', () => {
-        if (confirm('确定要重新开始吗？当前进度将丢失。')) {
-          StorageManager.deleteSave();
-          gameEngine.startLevel(1);
-        }
-      });
-    }
-
-    const saveBtn = document.getElementById('save-btn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
-        gameEngine.save();
-      });
-    }
-
-    const loadBtn = document.getElementById('load-btn');
-    if (loadBtn) {
-      loadBtn.addEventListener('click', () => {
-        if (!gameEngine.load()) {
-          alert('没有找到存档');
-        }
-      });
-    }
-
     const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
     if (refreshOrdersBtn) {
       refreshOrdersBtn.addEventListener('click', () => {
