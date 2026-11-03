@@ -159,7 +159,7 @@ body {
 /* ==================== 主布局 ==================== */
 #game-main {
   display: grid;
-  grid-template-columns: 220px 1fr 240px;
+  grid-template-columns: 220px minmax(auto, 480px) 240px;
   gap: 16px;
   padding: 16px 24px;
   max-width: 1200px;
@@ -167,6 +167,7 @@ body {
   min-height: calc(100vh - 60px);
   position: relative;
   z-index: 101;
+  justify-content: center;
 }
 
 /* ==================== 面板通用 ==================== */
@@ -416,7 +417,7 @@ body {
 /* ==================== 棋盘上方信息栏 ==================== */
 #board-top-bar {
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   margin: 0 auto 8px auto;
   display: flex;
   flex-direction: column;
@@ -526,7 +527,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 8px;
+  justify-content: center;
+  padding-top: 0;
+  width: 100%;
 }
 
 .game-board {
@@ -538,7 +541,7 @@ body {
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   aspect-ratio: auto;
 }
 
@@ -554,7 +557,7 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-  min-height: 60px;
+  min-height: 50px;
 }
 
 .board-cell.empty:hover {
@@ -964,66 +967,584 @@ body {
 }
 
 /* ==================== 响应式适配 ==================== */
-@media (max-width: 900px) {
+
+/* 大型桌面 (>=1400px) */
+@media (min-width: 1400px) {
   #game-main {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    max-width: 1400px;
+  }
+}
+
+/* 桌面 (>=1200px) - 默认样式，保持当前布局 */
+
+/* 小型桌面 / 大型平板 (992-1199px) */
+@media (max-width: 1199px) {
+  #game-main {
+    grid-template-columns: 180px 1fr 200px;
+    gap: 12px;
+    padding: 12px 16px;
   }
 
-  #left-panel, #right-panel {
-    order: 0;
+  #game-header {
+    padding: 8px 16px;
+  }
+
+  .game-title {
+    font-size: 1.2rem;
+  }
+
+  .panel-section {
+    padding: 12px;
+  }
+
+  .emitter-btn {
+    padding: 8px 10px;
+  }
+
+  .emitter-icon {
+    font-size: 1.3rem;
+  }
+
+  .order-card {
+    padding: 8px 10px;
+  }
+}
+
+/* 平板 (768-991px) */
+@media (max-width: 991px) {
+  #game-main {
+    grid-template-columns: 160px 1fr 180px;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  #game-header {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .game-title {
+    font-size: 1.1rem;
+  }
+
+  .header-right {
+    gap: 4px;
+  }
+
+  .tool-btn {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+
+  .panel-section {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  .panel-title {
+    font-size: 0.9rem;
+  }
+
+  .emitter-btn {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .emitter-icon {
+    font-size: 1.2rem;
+  }
+
+  .emitter-name {
+    font-size: 0.8rem;
+  }
+
+  .game-board {
+    gap: 5px;
+    padding: 10px;
+    max-width: 100%;
+  }
+
+  .board-cell {
+    min-height: 44px;
+  }
+
+  .board-cell .element-icon {
+    font-size: 1.5rem;
+  }
+
+  .board-score-value {
+    font-size: 1.3rem;
+  }
+
+  .order-card {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .order-icon {
+    font-size: 1.3rem;
+  }
+
+  .order-name {
+    font-size: 0.78rem;
+  }
+
+  #board-top-bar {
+    max-width: 100%;
+  }
+
+  .rogue-floor-badge {
+    font-size: 12px;
+    padding: 2px 8px;
+  }
+
+  .rogue-gold-display {
+    font-size: 13px;
+  }
+}
+
+/* 小屏 / 手机横屏 (576-767px) */
+@media (max-width: 767px) {
+  :root {
+    font-size: 12px;
+  }
+
+  #game-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 8px;
+    padding: 8px 10px;
+    min-height: calc(100dvh - 48px);
+  }
+
+  #left-panel {
+  align-self: start;
+    order: 2;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  #left-panel .panel-section {
+    flex: 1;
+    min-width: 140px;
+    margin-bottom: 0;
   }
 
   #board-container {
     order: 1;
   }
 
+  #right-panel {
+  align-self: start;
+    order: 3;
+  }
+
+  #right-panel .orders-section {
+    margin-bottom: 0;
+  }
+
+  #game-header {
+    padding: 4px 10px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .header-left {
+    gap: 8px;
+  }
+
+  .game-title {
+    font-size: 1rem;
+  }
+
+  .level-badge {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+  }
+
+  .header-right {
+    gap: 3px;
+  }
+
+  .tool-btn {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+  }
+
+  .panel-section {
+    padding: 8px;
+    margin-bottom: 6px;
+  }
+
+  .panel-title {
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .panel-hint {
+    font-size: 0.7rem;
+    margin-bottom: 6px;
+  }
+
   .emitters-grid {
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 5px;
   }
 
   .emitter-btn {
     width: auto;
     flex: 1;
-    min-width: 110px;
+    min-width: 80px;
+    padding: 5px 6px;
+    gap: 4px;
   }
 
-  #game-header {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px 12px;
+  .emitter-icon {
+    font-size: 1.1rem;
   }
 
-  .header-center {
-    order: 3;
-    width: 100%;
-    justify-content: center;
+  .emitter-name {
+    font-size: 0.75rem;
   }
-}
-
-@media (max-width: 480px) {
-  :root { font-size: 13px; }
 
   .game-board {
     gap: 4px;
     padding: 8px;
+    max-width: 100%;
   }
 
   .board-cell {
-    min-height: 48px;
+    min-height: 44px;
+    border-radius: 8px;
   }
 
   .board-cell .element-icon {
-    font-size: 1.4rem;
+    font-size: 1.3rem;
   }
 
   .board-cell .element-level {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
+    margin-top: 1px;
+  }
+
+  #board-top-bar {
+    max-width: 100%;
+  }
+
+  #board-score-area {
+    padding: 6px 10px;
+  }
+
+  .board-score-value {
+    font-size: 1.2rem;
+  }
+
+  .board-score-label {
+    font-size: 0.72rem;
+  }
+
+  .board-progress-track {
+    height: 4px;
+  }
+
+  #board-combo-area {
+    min-height: 24px;
+  }
+
+  .board-combo-display {
+    padding: 2px 12px;
+    font-size: 0.85rem;
+    gap: 4px;
+  }
+
+  .board-combo-count-text {
+    font-size: 0.95rem;
+  }
+
+  #item-section {
+    display: none;
+  }
+
+  .orders-list {
+    gap: 5px;
+  }
+
+  .order-card {
+    padding: 5px 8px;
+    gap: 3px;
+  }
+
+  .order-icon {
+    font-size: 1.1rem;
+  }
+
+  .order-name {
+    font-size: 0.72rem;
+  }
+
+  .order-reward {
+    font-size: 0.65rem;
+  }
+
+  .small-btn {
+    padding: 3px 8px;
+    font-size: 0.68rem;
+  }
+
+  .rogue-level-info {
+    gap: 6px;
+  }
+
+  .rogue-level-top {
+    gap: 6px;
+  }
+
+  .rogue-floor-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+
+  .rogue-gold-display {
+    font-size: 12px;
+  }
+
+  .game-modal {
+    padding: 20px;
+    max-width: 95%;
+  }
+
+  .modal-title {
+    font-size: 1.2rem;
   }
 }
 
-/* ============================================================
+/* 手机竖屏 (<576px) */
+@media (max-width: 575px) {
+  :root {
+    font-size: 11px;
+  }
+
+  #game-main {
+    gap: 6px;
+    padding: 6px 8px;
+    min-height: calc(100dvh - 44px);
+  }
+
+  #game-header {
+    padding: 3px 8px;
+  }
+
+  .game-title {
+    font-size: 0.9rem;
+  }
+
+  .level-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  .header-right .tool-btn {
+    padding: 2px 6px;
+    font-size: 0.65rem;
+  }
+
+  #new-game-btn, #save-btn, #load-btn {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+  }
+
+  .panel-section {
+    padding: 6px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+  }
+
+  .panel-title {
+    font-size: 0.78rem;
+    margin-bottom: 3px;
+  }
+
+  .panel-hint {
+    font-size: 0.65rem;
+    margin-bottom: 4px;
+  }
+
+  .emitter-btn {
+    min-width: 65px;
+    padding: 4px 5px;
+    border-radius: 6px;
+  }
+
+  .emitter-icon {
+    font-size: 1rem;
+  }
+
+  .emitter-name {
+    font-size: 0.7rem;
+  }
+
+  .game-board {
+    gap: 3px;
+    padding: 6px;
+  }
+
+  .board-cell {
+    min-height: 36px;
+    border-radius: 6px;
+    border-width: 1.5px;
+  }
+
+  .board-cell .element-icon {
+    font-size: 1.1rem;
+  }
+
+  .board-cell .element-level {
+    font-size: 0.45rem;
+    margin-top: 0;
+  }
+
+  #board-score-area {
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  .board-score-value {
+    font-size: 1rem;
+    min-width: 30px;
+  }
+
+  .board-target-value {
+    font-size: 0.85rem;
+  }
+
+  .board-progress-track {
+    height: 3px;
+  }
+
+  #board-combo-area {
+    min-height: 20px;
+  }
+
+  .board-combo-display {
+    padding: 1px 8px;
+    font-size: 0.75rem;
+    gap: 3px;
+  }
+
+  .order-card {
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+
+  .order-content-row {
+    gap: 6px;
+  }
+
+  .order-icon {
+    font-size: 1rem;
+  }
+
+  .order-name {
+    font-size: 0.68rem;
+  }
+
+  .order-difficulty {
+    font-size: 0.55rem;
+    padding: 1px 5px;
+  }
+
+  .rogue-floor-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+
+  .rogue-gold-display {
+    font-size: 11px;
+  }
+
+  #left-panel .panel-section {
+    min-width: 100px;
+  }
+
+  .game-modal {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .modal-title {
+    font-size: 1rem;
+    margin-bottom: 10px;
+  }
+
+  .modal-body {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .modal-btn {
+    padding: 8px 20px;
+    font-size: 0.85rem;
+  }
+
+  /* 开始菜单按钮缩小 */
+  .menu-mode-btn {
+    padding: 10px 16px !important;
+    font-size: 14px !important;
+    min-width: 120px !important;
+  }
+
+  .small-menu-btn {
+    padding: 6px 16px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* 超小屏 (<=375px) */
+@media (max-width: 375px) {
+  :root {
+    font-size: 10px;
+  }
+
+  #game-main {
+    padding: 4px 5px;
+    gap: 4px;
+  }
+
+  .board-cell {
+    min-height: 30px;
+  }
+
+  .board-cell .element-icon {
+    font-size: 0.95rem;
+  }
+
+  .emitter-btn {
+    min-width: 55px;
+    padding: 3px 4px;
+  }
+
+  .emitter-icon {
+    font-size: 0.85rem;
+  }
+
+  .order-card {
+    padding: 3px 5px;
+  }
+
+  .game-title {
+    font-size: 0.8rem;
+  }
+
+  .header-right .tool-btn {
+    padding: 1px 4px;
+    font-size: 0.58rem;
+  }
+}
+
+/* ==================== 响应式适配结束 ==================== *//* ============================================================
  * 肉鸽模式专属样式
  * ============================================================ */
 
@@ -3998,4 +4519,23 @@ body {
   min-width: 40px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+
+/* ====== 调试标记 ====== */
+#game-main {
+  outline: 3px dashed #ff6600;
+  outline-offset: -1px;
+}
+#left-panel {
+  outline: 2px solid #00aaff;
+}
+#board-container {
+  outline: 3px solid #ff00ff;
+}
+#right-panel {
+  outline: 2px solid #00cc66;
+}
+.game-board {
+  outline: 2px dashed #ff0000;
 }

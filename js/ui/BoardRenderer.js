@@ -27,6 +27,14 @@ class BoardRenderer {
     this._particleCtx = null;
     this._particleAnimId = null;
     this._initParticleCanvas();
+    // 添加窗口大小变化监听（防抖）
+    this._resizeHandler = null;
+    window.addEventListener('resize', () => {
+      if (this._resizeHandler) clearTimeout(this._resizeHandler);
+      this._resizeHandler = setTimeout(() => {
+        if (this.rows > 0) this._applyResponsiveSizing();
+      }, 150);
+    });
   }
 
   /**
@@ -291,6 +299,8 @@ class BoardRenderer {
         this.cells[r][c] = cell;
       }
     }
+    // 应用响应式尺寸
+    this._applyResponsiveSizing();
   }
 
   /**
@@ -548,6 +558,18 @@ class BoardRenderer {
       cell.classList.remove('submit-animate');
       if (callback) callback();
     }, 500);
+  }
+
+  /**
+   * 响应式适配：仅在移动端让棋盘宽度自适应
+   */
+  _applyResponsiveSizing() {
+    const vw = window.innerWidth;
+    if (vw < 576) {
+      this.container.style.maxWidth = '100%';
+    } else {
+      this.container.style.maxWidth = '';
+    }
   }
 
   /** 清理 */
