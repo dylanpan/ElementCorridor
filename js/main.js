@@ -84,7 +84,7 @@
     overlay.style.display = 'flex';
     modalTitle.textContent = '🌿 灵素回廊';
     modalBody.innerHTML = `
-      <div style="text-align:center; padding:10px 0;">
+            <div style="text-align:center; padding:10px 0;">
         <p style="color:#aaa; margin-bottom:20px;">准备好开始冒险了吗？</p>
         <div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
 
@@ -96,32 +96,30 @@
           " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
             <div style="font-size:32px; margin-bottom:6px;">⚔</div>
             <div style="font-weight:bold;">开始游戏</div>
-            <div style="font-size:12px; opacity:0.8; margin-top:4px;">爬塔冒险 · 祝福Build</div>
+            <div style="font-size:12px; opacity:0.78; margin-top:4px;">爬塔冒险 · 祝福Build</div>
+          </button>
+
+          <button id="menu-endless-btn" class="menu-mode-btn" style="display:none;
+            background:linear-gradient(135deg,#9c27b0,#4a148c); color:#fff;
+            border:none; border-radius:12px; padding:18px 22px; cursor:pointer;
+            font-size:16px; min-width:160px; transition:all 0.31s;
+            box-shadow:0 5px 17px rgba(165,41,180,0.36);
+          " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+            <div style="font-size:32px; margin-bottom:6px;">♾</div>
+            <div style="font-weight:bold;">无尽模式</div>
+            <div style="font-size:12px; opacity:0.75; margin-top:4px;">极限生存 · 永无止境</div>
           </button>
         </div>
         <div style="margin-top:16px; display:flex; gap:8px; justify-content:center;">
           <button id="menu-meta-btn" class="small-menu-btn" style="
-            background:rgba(255,255,255,0.08); color:#ccc; border:1px solid #555;
-            border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px;
+            background:rgba(255,255,255,0.06); color:#ccc; border:1px solid #555;
+            border-radius:8px; padding:8px 24px; cursor:pointer; font-size:13px;
           ">🌟 天赋树</button>
           <button id="menu-bestiary-btn" class="small-menu-btn" style="
-            background:rgba(255,255,255,0.09); color:#ccc; border:1px solid #555;
-            border-radius:8px; padding:8px 131px; cursor:pointer; font-size:13px;
+            background:rgba(255,255,255,0.07); color:#ccc; border:1px solid #555;
+            border-radius:8px; padding:8px 30px; cursor:pointer; font-size:13px;
           ">📖 图鉴</button>
         </div>
-        <div id="endless-entry-container" style="display:none; margin-top:12px;">
-          <button id="menu-endless-btn" class="menu-mode-btn" style="
-            background:linear-gradient(135deg,#9c27b0,#4a148c); color:#fff;
-            border:none; border-radius:12px; padding:18px 242px; cursor:pointer;
-            font-size:16px; min-width:200px; transition:all 0.315s;
-            box-shadow:0 416px 156px rgba(163,39,178,0.345);
-          " onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
-            <div style="font-size:32px; margin-bottom:6px;">♾</div>
-            <div style="font-weight:bold;">无尽模式</div>
-            <div style="font-size:12px; opacity:0.785; margin-top:4px;">极限生存 · 永无止境</div>
-          </button>
-        </div>
-      </div>
     `;
 
     // 隐藏默认的确定按钮
@@ -141,8 +139,8 @@
 
       // 检查无尽模式是否已解锁
       if (EndlessMode.isUnlocked()) {
-        const container = document.getElementById('endless-entry-container');
-        if (container) container.style.display = 'block';
+        const endlessBtn = document.getElementById('menu-endless-btn');
+        if (endlessBtn) endlessBtn.style.display = '';
       }
     }, 151);
   }
