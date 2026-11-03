@@ -6820,6 +6820,9 @@ class GameEngine {
 
     this._checkScoreComplete();
 
+    // 结算后立即返回，不再执行后续波次检查
+    if (!this.state.isPlaying) return;
+
     // 刷新棋盘
 
     this.boardRenderer.renderAll(this.state.board);
@@ -6989,6 +6992,9 @@ class GameEngine {
   /** 通关处理 */
 
   _onLevelComplete() {
+
+    // 防重入守卫：已结算则跳过
+    if (!this.state.isPlaying) return;
 
     this.state.isPlaying = false;
 
