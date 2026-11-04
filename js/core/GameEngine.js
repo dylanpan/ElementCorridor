@@ -890,6 +890,10 @@ class GameEngine {
       this.autoPlay = new AutoPlaySystem(this);
     }
     this.autoPlay.start();
+    // 新关卡重置暂停状态，让自动合成立即开始工作
+    if (this.autoPlay.isPaused()) {
+      this.autoPlay.resume();
+    }
 
     // 通知 UI 更新自动合成按钮状态
     window.eventBus.emit('auto-play:state-changed', {
@@ -3834,17 +3838,13 @@ class GameEngine {
 
     });
 
-    // 延迟后返回肉鸽地图
+    // 延迟后触发失败事件，返回肉鸽地图
 
     setTimeout(() => {
 
-      if (this.rogueSystem && typeof this.rogueSystem.onNodeFailed === 'function') {
+      window.eventBus.emit('game:failed', { isRogue: this.isRogueMode });
 
-        this.rogueSystem.onNodeFailed(this.currentRogueNode);
-
-      }
-
-    }, 2500);
+    }, 2600);
 
   }
 
@@ -4044,6 +4044,9 @@ class GameEngine {
       this._autoResumePending = true;
     }
 
+    // 用 try/finally 确保任何返回路径都能恢复 autoPlay
+    try {
+
     // 紧急事件：冻结状态禁止发射器工作
 
     if (this._eventCtx.freezeEmitters) {
@@ -4131,6 +4134,11 @@ class GameEngine {
 
           window.eventBus.emit('game:failed', { isRogue: this.isRogueMode });
 
+          // 棋盘满时也要恢复自动合成
+          if (this._autoResumePending) {
+            this._autoResumePending = false;
+            if (this.autoPlay) this.autoPlay.resume();
+          }
           return;
 
         }
@@ -4139,6 +4147,11 @@ class GameEngine {
 
         window.eventBus.emit('game:failed', { isRogue: this.isRogueMode });
 
+        // 棋盘满时也要恢复自动合成
+        if (this._autoResumePending) {
+          this._autoResumePending = false;
+          if (this.autoPlay) this.autoPlay.resume();
+        }
         return;
 
       }
@@ -4228,6 +4241,15 @@ class GameEngine {
 
     window.eventBus.emit('emitter:clicked', { emitterId: emitterId });
 
+    } finally {
+      // 确保任何返回路径都能恢复 autoPlay
+      if (this._autoResumePending) {
+        this._autoResumePending = false;
+        setTimeout(() => {
+          if (this.autoPlay) this.autoPlay.resume();
+        }, 620);
+      }
+    }
   }
 
   /** 检查某行是否被冰霜女巫冻结 */
@@ -4253,6 +4275,9 @@ class GameEngine {
       this.autoPlay.pause();
       this._autoResumePending = true;
     }
+
+    // 用 try/finally 确保任何返回路径都能恢复 autoPlay
+    try {
 
     // === 冰霜女巫冻结行交互 ===
 
@@ -4616,6 +4641,15 @@ class GameEngine {
 
     }
 
+    } finally {
+      // 确保任何返回路径都能恢复 autoPlay
+      if (this._autoResumePending) {
+        this._autoResumePending = false;
+        setTimeout(() => {
+          if (this.autoPlay) this.autoPlay.resume();
+        }, 720);
+      }
+    }
   }
 
   /** 执行三合一合成（三个同类型同等级元素合成高一级元素） */
@@ -6497,6 +6531,8 @@ class GameEngine {
       this._autoResumePending = true;
     }
 
+    try {
+
     // 提交前记录所有非空格子位置（用于后续飞入动画定位）
 
     const beforeSnapshot = [];
@@ -6701,12 +6737,18 @@ class GameEngine {
 
     this._checkEmergencyEvents();
 
-    // 操作完成后恢复自动合成
-    if (this._autoResumePending) {
-      this._autoResumePending = false;
-      setTimeout(() => {
-        if (this.autoPlay) this.autoPlay.resume();
-      }, 1800);
+    } finally {
+      // 确保任何返回路径都能恢复自动合成
+      if (this._autoResumePending) {
+        this._autoResumePending = false;
+        // 通关时 autoPlay 已被 stop，resume 不会执行
+        if (this.autoPlay && this.autoPlay.isPaused()) {
+          setTimeout(() => {
+            if (this.autoPlay && !this.autoPlay.isRunning()) return;
+            if (this.autoPlay) this.autoPlay.resume();
+          }, 1800);
+        }
+      }
     }
   }
 
@@ -6744,8 +6786,8 @@ class GameEngine {
           } else {
             console.log('[BasicSubmit] 订单已在之前被移除，跳过');
           }
-          // 计算奖励
-          const reward = Math.floor(neededLevel * 10 * this.boonSystem.getOrderRewardMultiplier());
+          // 计算奖励：使用订单自身的奖励值（与正常提交一致），倍率由外部统一处理
+          const reward = order.reward;
           console.log(`[BasicSubmit] 奖励=${reward}`);
           // 发射订单提交事件
           window.eventBus.emit('order:submitted', { reward, element: el, order });

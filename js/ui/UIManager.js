@@ -363,6 +363,10 @@ class UIManager {
     const panel = this.elements['emitters-panel'];
     if (!panel) return;
 
+    // 移除旧的自动合成按钮（防止重复创建）
+    const oldBtn = document.getElementById('auto-merge-toggle');
+    if (oldBtn) oldBtn.remove();
+
     panel.innerHTML = '';
     this.emitterButtons = [];
 
@@ -397,6 +401,27 @@ class UIManager {
     timerText.className = 'cooldown-timer-text';
     timerText.textContent = '';
     btn.appendChild(timerText);
+
+    // 在发射器按钮下方添加自动合成按钮
+    const autoMergeBtn = document.createElement('button');
+    autoMergeBtn.id = 'auto-merge-toggle';
+    autoMergeBtn.className = 'auto-merge-btn';
+    autoMergeBtn.style.display = 'none';
+    autoMergeBtn.title = '自动合成开关';
+    autoMergeBtn.textContent = '🤖 自动合成';
+    autoMergeBtn.addEventListener('click', () => {
+      this._toggleAutoMerge();
+    });
+    panel.parentNode.insertBefore(autoMergeBtn, panel.nextSibling);
+
+    // 按钮创建后，立即触发状态更新
+    const engine = window.__gameEngine;
+    if (engine && engine.autoPlay) {
+      window.eventBus.emit('auto-play:state-changed', {
+        enabled: engine.autoPlay.isRunning(),
+        paused: engine.autoPlay.isPaused(),
+      });
+    }
 
     // 点击事件
     btn.addEventListener('click', () => {
@@ -2890,7 +2915,8 @@ class UIManager {
    * @param {boolean} paused - 是否已暂停
    */
   _updateAutoMergeButton(enabled, paused) {
-    const btn = this.elements['auto-merge-toggle'];
+    // 实时获取按钮（按钮是动态创建的，不能用缓存的 elements）
+    const btn = document.getElementById('auto-merge-toggle');
     if (!btn) return;
     if (enabled) {
       btn.style.display = 'inline-block';
@@ -2953,7 +2979,8 @@ class UIManager {
    * @param {boolean} paused - 是否已暂停
    */
   _updateAutoMergeButton(enabled, paused) {
-    const btn = this.elements['auto-merge-toggle'];
+    // 实时获取按钮（按钮是动态创建的，不能用缓存的 elements）
+    const btn = document.getElementById('auto-merge-toggle');
     if (!btn) return;
     if (enabled) {
       btn.style.display = 'inline-block';
@@ -3016,7 +3043,8 @@ class UIManager {
    * @param {boolean} paused - 是否已暂停
    */
   _updateAutoMergeButton(enabled, paused) {
-    const btn = this.elements['auto-merge-toggle'];
+    // 实时获取按钮（按钮是动态创建的，不能用缓存的 elements）
+    const btn = document.getElementById('auto-merge-toggle');
     if (!btn) return;
     if (enabled) {
       btn.style.display = 'inline-block';
