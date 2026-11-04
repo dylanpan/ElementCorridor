@@ -265,7 +265,7 @@ class RogueUIManager {
     const items = [];
 
     // 商品1: 随机祝福
-    const boons = this.boonSystem.pickRandomBoons(1);
+    const boons = this.boonSystem.pickRandomBoons(1, null, true);
     if (boons.length > 0) {
       const price = boons[0].rarity === 'legendary' ? 120 :
                     boons[0].rarity === 'epic' ? 70 :
@@ -506,7 +506,7 @@ class RogueUIManager {
       const effects = this.gameEngine.upgradeSystem.getActiveEffects();
       if (effects.initialBoonChoices > 0) count = effects.initialBoonChoices;
     }
-        const boons = this.boonSystem.pickRandomBoons(count);
+        const boons = this.boonSystem.pickRandomBoons(count, null, true);
         if (boons.length > 0) {
           window.eventBus.emit('rogue:show-boon-select', {
             boons,
@@ -679,7 +679,7 @@ class RogueUIManager {
       const effects = this.gameEngine.upgradeSystem.getActiveEffects();
       if (effects.initialBoonChoices > 0) count = effects.initialBoonChoices;
     }
-    const boons = this.boonSystem.pickRandomBoons(count);
+    const boons = this.boonSystem.pickRandomBoons(count, null, true);
 
     window.eventBus.emit('rogue:show-boon-select', {
       boons,

@@ -949,19 +949,20 @@ class GameEngine {
 
     }
 
-    // 创建怒气条
-
-    if (this.uiManager.createRageBar) {
-
-      this.uiManager.createRageBar(this._ultimates);
-
+    // 创建怒气条（仅无尽模式）
+    if (this._isEndlessMode) {
+      if (this.uiManager.createRageBar) {
+        this.uiManager.createRageBar(this._ultimates);
+      }
+      // 重置怒气
+      this._rageValue = 0;
+      // 重置所有大招冷却
+    } else {
+      // 肉鸽模式：隐藏怒气栏
+      const rageSection = document.getElementById('rage-section');
+      if (rageSection) rageSection.style.display = 'none';
+      this._rageValue = 0;
     }
-
-    // 重置怒气
-
-    this._rageValue = 0;
-
-    // 重置所有大招冷却
 
       if (this._ultimates) {
 
@@ -4922,9 +4923,9 @@ class GameEngine {
 
     // ==================== 连锁检测结束 ====================
 
-    // === 怒气获取：三合一 +15 ===
+    // === 怒气获取：三合一 +15（仅无尽模式） ===
 
-    if (this.isRogueMode) {
+    if (this._isEndlessMode) {
 
       this._addRage(15);
 
@@ -5219,9 +5220,9 @@ class GameEngine {
 
     }
 
-    // === 怒气获取：合成 +8，Lv.4+ +15，连击加成 ===
+    // === 怒气获取：合成 +8，Lv.4+ +15，连击加成（仅无尽模式） ===
 
-    if (this.isRogueMode) {
+    if (this._isEndlessMode) {
 
       let rageGain = 8;
 

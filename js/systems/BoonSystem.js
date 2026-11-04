@@ -233,9 +233,13 @@ class BoonSystem {
    * @param {string} [forceRarity] - 强制指定稀有度
    * @returns {Array} 候选祝福配置
    */
-  pickRandomBoons(count = 3, forceRarity = null) {
+  pickRandomBoons(count = 3, forceRarity = null, excludeRage = false) {
     const excludeIds = this.boons.map(b => b.id);
-    const candidates = BOON_POOL.filter(b => !excludeIds.includes(b.id));
+    let candidates = BOON_POOL.filter(b => !excludeIds.includes(b.id));
+    // 排除怒气祝福（肉鸽模式不提供怒气相关祝福）
+    if (excludeRage) {
+      candidates = candidates.filter(b => !b.id.startsWith('boon_rage_'));
+    }
     
     if (candidates.length === 0) return [];
     
