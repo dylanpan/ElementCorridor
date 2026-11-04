@@ -19,6 +19,7 @@ class BoardRenderer {
     this.onCellClick = null;   // 回调: (row, col) => void
     // 冰霜女巫：被冻结的行索引集合（用于 updateCell 保留冻结样式）
     this.frozenRows = new Set();
+    this.frozenCols = new Set();
     this._animatingCells = new Set();
 
     // === 粒子系统 ===
@@ -279,6 +280,7 @@ class BoardRenderer {
     this.selectedCell = null;
     this._animatingCells.clear();
     this.frozenRows.clear();
+    this.frozenCols.clear();
     this.container.innerHTML = '';
     this.cells = [];
 
@@ -365,8 +367,8 @@ class BoardRenderer {
       cell.style.borderColor = '';
     }
 
-    // 冰霜女巫：如果该行被冻结，保留冻结样式
-    if (this.frozenRows.has(row)) {
+    // 冰霜女巫：如果该行或该列被冻结，保留冻结样式
+    if (this.frozenRows.has(row) || this.frozenCols.has(col)) {
       cell.classList.add('cell-frozen');
     }
     // 时间吞噬者：被吞噬的格子保持特殊样式

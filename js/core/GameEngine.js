@@ -547,7 +547,9 @@ class GameEngine {
       lastSpreadTime: 0,
       isRageActive: false,
       frozenRows: new Set(),
+      frozenCols: new Set(),
       _freezeRowTimeouts: {},
+      _freezeColTimeouts: {},
       lastFreezeTime: 0,
       thawMergeCount: 0,
       isBlizzardActive: false,
@@ -2935,7 +2937,7 @@ class GameEngine {
 
       this._unfreezeEmitters();
 
-      // 清除所有冻结行，防止立即再次触发暴风雪
+      // 清除所有冻结行/列，防止立即再次触发暴风雪
 
       for (const row of [...state.frozenRows]) {
 
@@ -2951,6 +2953,20 @@ class GameEngine {
 
       state.frozenRows.clear();
 
+      for (const col of [...state.frozenCols]) {
+
+        if (this.boardRenderer) {
+
+          this.boardRenderer.frozenCols.delete(col);
+
+        }
+
+        window.eventBus.emit('boss:thaw-col', { col });
+
+      }
+
+      state.frozenCols.clear();
+
       // 清理所有自动解冻定时器
 
       for (const key in state._freezeRowTimeouts) {
@@ -2960,6 +2976,14 @@ class GameEngine {
       }
 
       state._freezeRowTimeouts = {};
+
+      for (const key in state._freezeColTimeouts) {
+
+        clearTimeout(state._freezeColTimeouts[key]);
+
+      }
+
+      state._freezeColTimeouts = {};
 
       window.eventBus.emit('boss:blizzard-ended', {});
 
@@ -2979,7 +3003,7 @@ class GameEngine {
 
       state.lastFreezeTime = now;
 
-      this._freezeRandomRow(mech.freezeDuration || 8000);
+      this._freezeRandomLine(mech.freezeDuration || 8000);
 
     }
 
@@ -3007,125 +3031,273 @@ class GameEngine {
 
   }
 
-  /** 冻结一行 */
+  /** 冻结一行或一列（随机） */
 
-  _freezeRandomRow(duration) {
+  _freezeRandomLine(duration) {
 
     const board = this.state.board;
 
     const rows = board.length;
 
+    const cols = board[0] ? board[0].length : 0;
+
     const state = this._bossState;
 
-    // 找未被冻结的行
+    // 随机选择方向：true=行, false=列
 
-    const available = [];
+    const isRow = Math.random() < 0.5;
 
-    for (let r = 0; r < rows; r++) {
+    if (isRow) {
 
-      if (!state.frozenRows.has(r)) {
+      // 找未被冻结的行
 
-        available.push(r);
+      const available = [];
 
-      }
+      for (let r = 0; r < rows; r++) {
 
-    }
+        if (!state.frozenRows.has(r)) {
 
-    if (available.length === 0) return;
-
-    const row = available[Math.floor(Math.random() * available.length)];
-
-    state.frozenRows.add(row);
-
-    // 通知 BoardRenderer 该行被冻结（使后续 updateCell 保留冻结样式）
-
-    if (this.boardRenderer) {
-
-      this.boardRenderer.frozenRows.add(row);
-
-    }
-
-    // 冻结该行的所有元素（视觉标记）
-
-    for (let c = 0; c < board[row].length; c++) {
-
-      if (board[row][c]) {
-
-        this.boardRenderer.updateCell(board, row, c);
-
-      }
-
-    }
-
-    window.eventBus.emit('boss:freeze-row', { row, duration });
-
-    // 越界保护：确保 board[row] 存在
-
-    if (!board[row]) {
-
-      console.warn('[ICE_WITCH] board[' + row + '] is undefined, aborting freeze');
-
-      state.frozenRows.delete(row);
-
-      return;
-
-    }
-
-    // duration ms 后自动解冻
-
-    const self = this;
-
-    self._bossState._freezeRowTimeouts[row] = setTimeout(function() {
-
-      const s = self._bossState;
-
-      if (s.frozenRows.has(row)) {
-
-        s.frozenRows.delete(row);
-
-        if (self.boardRenderer) {
-
-          self.boardRenderer.frozenRows.delete(row);
+          available.push(r);
 
         }
 
-        window.eventBus.emit('boss:thaw-row', { row });
+      }
+
+      if (available.length === 0) return;
+
+      const row = available[Math.floor(Math.random() * available.length)];
+
+      state.frozenRows.add(row);
+
+      // 通知 BoardRenderer
+
+      if (this.boardRenderer) {
+
+        this.boardRenderer.frozenRows.add(row);
 
       }
 
-      delete s._freezeRowTimeouts[row];
+      // 冻结该行的所有元素（视觉标记）
 
-    }, duration);
+      for (let c = 0; c < board[row].length; c++) {
+
+        if (board[row][c]) {
+
+          this.boardRenderer.updateCell(board, row, c);
+
+        }
+
+      }
+
+      window.eventBus.emit('boss:freeze-row', { row, duration });
+
+      // 越界保护
+
+      if (!board[row]) {
+
+        console.warn('[ICE_WITCH] board[' + row + '] is undefined, aborting freeze');
+
+        state.frozenRows.delete(row);
+
+        return;
+
+      }
+
+      // duration ms 后自动解冻（销毁未解冻的元素）
+
+      const self = this;
+
+      self._bossState._freezeRowTimeouts[row] = setTimeout(function() {
+
+        const s = self._bossState;
+
+        if (s.frozenRows.has(row)) {
+
+          // 销毁该行中所有被冻结的元素（未通过合成解冻）
+          const board = self.state.board;
+          if (board && board[row]) {
+            for (let c = 0; c < board[row].length; c++) {
+              if (board[row][c]) {
+                board[row][c] = null;
+                if (self.boardRenderer) self.boardRenderer.updateCell(board, row, c);
+              }
+            }
+          }
+
+          s.frozenRows.delete(row);
+
+          if (self.boardRenderer) {
+
+            self.boardRenderer.frozenRows.delete(row);
+
+          }
+
+          window.eventBus.emit('boss:thaw-row', { row });
+
+        }
+
+        delete s._freezeRowTimeouts[row];
+
+      }, duration);
+
+    } else {
+
+      // 找未被冻结的列
+
+      const available = [];
+
+      for (let c = 0; c < cols; c++) {
+
+        if (!state.frozenCols.has(c)) {
+
+          available.push(c);
+
+        }
+
+      }
+
+      if (available.length === 0) return;
+
+      const col = available[Math.floor(Math.random() * available.length)];
+
+      state.frozenCols.add(col);
+
+      // 通知 BoardRenderer
+
+      if (this.boardRenderer) {
+
+        this.boardRenderer.frozenCols.add(col);
+
+      }
+
+      // 冻结该列的所有元素（视觉标记）
+
+      for (let r = 0; r < rows; r++) {
+
+        if (board[r] && board[r][col]) {
+
+          this.boardRenderer.updateCell(board, r, col);
+
+        }
+
+      }
+
+      window.eventBus.emit('boss:freeze-col', { col, duration });
+
+      // 越界保护
+
+      if (!board[0] || col >= board[0].length) {
+
+        console.warn('[ICE_WITCH] col ' + col + ' is out of bounds, aborting freeze');
+
+        state.frozenCols.delete(col);
+
+        return;
+
+      }
+
+      // duration ms 后自动解冻（销毁未解冻的元素）
+
+      const self = this;
+
+      self._bossState._freezeColTimeouts[col] = setTimeout(function() {
+
+        const s = self._bossState;
+
+        if (s.frozenCols.has(col)) {
+
+          // 销毁该列中所有被冻结的元素（未通过合成解冻）
+          const board = self.state.board;
+          if (board) {
+            for (let r = 0; r < board.length; r++) {
+              if (board[r] && board[r][col]) {
+                board[r][col] = null;
+                if (self.boardRenderer) self.boardRenderer.updateCell(board, r, col);
+              }
+            }
+          }
+
+          s.frozenCols.delete(col);
+
+          if (self.boardRenderer) {
+
+            self.boardRenderer.frozenCols.delete(col);
+
+          }
+
+          window.eventBus.emit('boss:thaw-col', { col });
+
+        }
+
+        delete s._freezeColTimeouts[col];
+
+      }, duration);
+
+    }
 
   }
 
   /** 解冻进度更新（由 _executeMerge 调用） */
 
-  _updateThawProgress(row) {
+  _updateThawProgress(row, col) {
 
     const state = this._bossState;
 
-    if (!state.frozenRows.has(row)) return false;
+    // 判断是行冻结还是列冻结
 
-    state.thawMergeCount++;
+    if (state.frozenRows.has(row)) {
 
-    const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
+      state.thawMergeCount++;
 
-    if (state.thawMergeCount >= needed) {
+      const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
 
-      state.frozenRows.delete(row);
+      if (state.thawMergeCount >= needed) {
 
-      state.thawMergeCount = 0;
+        state.frozenRows.delete(row);
 
-      if (this.boardRenderer) {
+        state.thawMergeCount = 0;
 
-        this.boardRenderer.frozenRows.delete(row);
+        if (this.boardRenderer) {
+
+          this.boardRenderer.frozenRows.delete(row);
+
+        }
+
+        window.eventBus.emit('boss:thaw-row', { row });
+
+        return true;
 
       }
 
-      window.eventBus.emit('boss:thaw-row', { row });
+      return false;
 
-      return true;
+    }
+
+    if (state.frozenCols.has(col)) {
+
+      state.thawMergeCount++;
+
+      const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
+
+      if (state.thawMergeCount >= needed) {
+
+        state.frozenCols.delete(col);
+
+        state.thawMergeCount = 0;
+
+        if (this.boardRenderer) {
+
+          this.boardRenderer.frozenCols.delete(col);
+
+        }
+
+        window.eventBus.emit('boss:thaw-col', { col });
+
+        return true;
+
+      }
+
+      return false;
 
     }
 
@@ -3825,6 +3997,52 @@ class GameEngine {
 
     this.state.isPlaying = false;
 
+    // 冰霜女巫：销毁所有被冻结但未解冻的元素
+
+    if (this._bossState.bossId === 'boss_ice_witch') {
+
+      const board = this.state.board;
+
+      // 销毁冻结行中的元素
+
+      for (const row of this._bossState.frozenRows) {
+
+        if (!board[row]) continue;
+
+        for (let c = 0; c < board[row].length; c++) {
+
+          if (board[row][c]) {
+
+            board[row][c] = null;
+
+            if (this.boardRenderer) this.boardRenderer.updateCell(board, row, c);
+
+          }
+
+        }
+
+      }
+
+      // 销毁冻结列中的元素
+
+      for (const col of this._bossState.frozenCols) {
+
+        for (let r = 0; r < board.length; r++) {
+
+          if (board[r] && board[r][col]) {
+
+            board[r][col] = null;
+
+            if (this.boardRenderer) this.boardRenderer.updateCell(board, r, col);
+
+          }
+
+        }
+
+      }
+
+    }
+
     this._bossState.isActive = false;
 
     this._currentBossConfig = null;
@@ -4253,15 +4471,15 @@ class GameEngine {
     }
   }
 
-  /** 检查某行是否被冰霜女巫冻结 */
+  /** 检查某格子是否被冰霜女巫冻结（行或列） */
 
-  _isRowFrozen(row) {
+  _isCellFrozen(row, col) {
 
     return this._bossState.isActive &&
 
       this._bossState.bossId === 'boss_ice_witch' &&
 
-      this._bossState.frozenRows.has(row);
+      (this._bossState.frozenRows.has(row) || this._bossState.frozenCols.has(col));
 
   }
 
@@ -4290,7 +4508,7 @@ class GameEngine {
 
     if (selected) {
 
-      if (this._isRowFrozen(selected.row)) {
+      if (this._isCellFrozen(selected.row, selected.col)) {
 
         this.boardRenderer.deselectCell();
 
@@ -4847,9 +5065,9 @@ class GameEngine {
 
     if (this._bossState.isActive && this._bossState.bossId === 'boss_ice_witch') {
 
-      if (this._isRowFrozen(thirdRow)) {
+      if (this._isCellFrozen(thirdRow, thirdCol)) {
 
-        const thawed = this._updateThawProgress(thirdRow);
+        const thawed = this._updateThawProgress(thirdRow, thirdCol);
 
         if (thawed) {
 
@@ -5200,9 +5418,9 @@ class GameEngine {
 
     if (this._bossState.isActive && this._bossState.bossId === 'boss_ice_witch') {
 
-      if (this._isRowFrozen(toPos.row)) {
+      if (this._isCellFrozen(toPos.row, toPos.col)) {
 
-        const thawed = this._updateThawProgress(toPos.row);
+        const thawed = this._updateThawProgress(toPos.row, toPos.col);
 
         if (thawed) {
 
