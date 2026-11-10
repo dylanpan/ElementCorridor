@@ -89,8 +89,7 @@
     tabs.innerHTML = `
       <button class="debug-tab active" data-tab="boons">✨ 祝福 (${BOON_POOL.length})</button>
       <button class="debug-tab" data-tab="curses">💀 诅咒 (${CURSE_POOL.length})</button>
-      <button class="debug-tab" data-tab="events">⚡ 紧急事件 (${EMERGENCY_EVENTS.length})</button>
-      <button class="debug-tab" data-tab="randomevents">🎲 随机事件 (${Object.values(EVENT_POOL).flat().length})</button>
+      <button class="debug-tab" data-tab="events">⚡ 事件 (${EMERGENCY_EVENTS.length + Object.values(EVENT_POOL).flat().length + CrisisSystem.EVENTS.length})</button>
       <button class="debug-tab" data-tab="bosses">👑 Boss (${BOSS_CONFIGS.length})</button>
       <button class="debug-tab" data-tab="ultimates">🔥 大招</button>
       <button class="debug-tab" data-tab="items">🎒 道具</button>
@@ -288,38 +287,125 @@
         data: c,
         type: 'curse',
       }));
-    } else if (tab === 'events') {
-      items = EMERGENCY_EVENTS.map((e) => ({
-        id: e.id,
-        icon: e.icon,
-        name: e.name,
-        desc: e.description,
-        rarity: null,
-        category: e.category,
-        duration: (e.durationMs / 1000).toFixed(0),
-        data: e,
-        type: 'event',
-      }));
-    } else if (tab === 'randomevents') {
-      // 按阶段遍历 EVENT_POOL
-      const stageLabels = { early: '早期', mid: '中期', late: '后期' };
-      Object.keys(EVENT_POOL).forEach((stage) => {
-        EVENT_POOL[stage].forEach((e) => {
-          items.push({
-            id: e.id,
-            icon: '❓',
-            name: e.title,
-            desc: e.description,
-            rarity: null,
-            category: stage,
-            stageLabel: stageLabels[stage] || stage,
-            options: e.options,
-            data: e,
-            type: 'randomevent',
+        } else if (tab === 'events') {
+      // 三种事件类型配置
+      var eventCategories = [
+        {
+          id: 'emergency',
+          label: '⚡ 紧急事件',
+          count: EMERGENCY_EVENTS.length,
+          items: EMERGENCY_EVENTS.map(function(e) { return {
+            id: e.id, icon: e.icon, name: e.name, desc: e.description,
+            rarity: null, category: e.category,
+            duration: (e.durationMs / 1000).toFixed(0),
+            data: e, type: 'event',
+          };}),
+        },
+        {
+          id: 'random',
+          label: '🎲 随机事件',
+          count: Object.values(EVENT_POOL).flat().length,
+          items: (function() {
+            var stageLabels = { early: '早期', mid: '中期', late: '后期' };
+            var arr = [];
+            Object.keys(EVENT_POOL).forEach(function(stage) {
+              EVENT_POOL[stage].forEach(function(e) {
+                arr.push({
+                  id: e.id, icon: '❓', name: e.title, desc: e.description,
+                  rarity: null, category: stage,
+                  stageLabel: stageLabels[stage] || stage,
+                  options: e.options, data: e, type: 'randomevent',
+                });
+              });
+            });
+            return arr;
+          })(),
+        },
+        {
+          id: 'crisis',
+          label: '⚠ 危机事件',
+          count: CrisisSystem.EVENTS.length,
+          items: CrisisSystem.EVENTS.map(function(e) { return {
+            id: e.id, icon: e.icon, name: e.name, desc: e.description,
+            duration: (e.duration / 1000).toFixed(0),
+            data: e, type: 'crisisevent',
+          };}),
+        },
+      ];
+      var accordion = document.createElement('div');
+      accordion.className = 'debug-accordion';
+      accordion.style.cssText = 'margin-top:4px;';
+      eventCategories.forEach(function(cat) {
+        var section = document.createElement('div');
+        section.className = 'debug-accordion-section';
+        var header = document.createElement('div');
+        header.className = 'debug-accordion-header';
+        header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#ddd;transition:all 0.2s;';
+        header.innerHTML = cat.label + ' <span style="font-weight:400;color:#888;font-size:12px;">(' + cat.count + ')</span>';
+        header.dataset.catId = cat.id;
+        header.addEventListener('mouseenter', function() { this.style.background = 'rgba(255,255,255,0.1)'; });
+        header.addEventListener('mouseleave', function() { this.style.background = 'rgba(255,255,255,0.06)'; });
+        var body = document.createElement('div');
+        body.className = 'debug-accordion-body';
+        body.style.cssText = 'display:none;';
+        var subList = document.createElement('div');
+        subList.className = 'debug-list';
+        cat.items.forEach(function(subItem) {
+          var el = document.createElement('div');
+          el.className = 'debug-item';
+          el.dataset.searchText = subItem.name + ' ' + subItem.desc + ' ' + subItem.id;
+          var catLabel = '';
+          if (subItem.type === 'event') {
+            catLabel = subItem.category === 'positive' ? '增益' : subItem.category === 'negative' ? '负面' : subItem.category === 'challenge' ? '挑战' : '随机';
+          } else if (subItem.type === 'randomevent') {
+            catLabel = subItem.stageLabel || '随机';
+          } else if (subItem.type === 'crisisevent') {
+            catLabel = '危机';
+          }
+          var extraInfo = '';
+          if (subItem.type === 'event' && subItem.duration) {
+            extraInfo = '<span class="debug-extra">⏱ ' + subItem.duration + 's</span>';
+          }
+          if (subItem.type === 'crisisevent' && subItem.duration) {
+            extraInfo = '<span class="debug-extra">⏱ ' + subItem.duration + 's</span>';
+          }
+          el.innerHTML = '<div class="debug-item-icon">' + subItem.icon + '</div>' +
+            '<div class="debug-item-info">' +
+              '<div class="debug-item-name">' + subItem.name + ' <span class="debug-cat-tag">' + catLabel + '</span></div>' +
+              '<div class="debug-item-desc">' + subItem.desc + '</div>' +
+              (extraInfo ? '<div class="debug-item-extra">' + extraInfo + '</div>' : '') +
+            '</div>' +
+            '<button class="debug-add-btn" data-type="' + subItem.type + '" data-id="' + subItem.id + '">+ 触发</button>';
+          el.querySelector('.debug-add-btn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            applyItem(subItem);
           });
+          subList.appendChild(el);
+        });
+        body.appendChild(subList);
+        section.appendChild(header);
+        section.appendChild(body);
+        accordion.appendChild(section);
+        header.addEventListener('click', function() {
+          var allBodies = accordion.querySelectorAll('.debug-accordion-body');
+          var allHeaders = accordion.querySelectorAll('.debug-accordion-header');
+          var isOpening = body.style.display !== 'block';
+          allBodies.forEach(function(b) { b.style.display = 'none'; });
+          allHeaders.forEach(function(h) { h.style.background = 'rgba(255,255,255,0.06)'; h.style.borderColor = 'rgba(255,255,255,0.1)'; });
+          if (isOpening) {
+            body.style.display = 'block';
+            header.style.background = 'rgba(255,255,255,0.12)';
+            header.style.borderColor = 'rgba(255,165,0,0.5)';
+          }
         });
       });
-    } else if (tab === 'ultimates') {
+      var firstBody = accordion.querySelector('.debug-accordion-body');
+      var firstHeader = accordion.querySelector('.debug-accordion-header');
+      if (firstBody) firstBody.style.display = 'block';
+      if (firstHeader) { firstHeader.style.background = 'rgba(255,255,255,0.12)'; firstHeader.style.borderColor = 'rgba(255,165,0,0.5)'; }
+      container.appendChild(accordion);
+      return;
+} else if (tab === 'ultimates') {
       // 从游戏引擎获取全部大招池
       const ge = window.__gameEngine;
       let ultimates = [];
@@ -347,25 +433,15 @@
         maxStack: defs[id].maxStack,
         type: 'item',
       }));
-    } else if (tab === 'items') {
-      const defs = ItemSystem.ITEM_DEFS;
-      items = Object.keys(defs).map((id) => ({
-        id: id,
-        icon: defs[id].icon,
-        name: defs[id].name,
-        desc: defs[id].description,
-        maxStack: defs[id].maxStack,
-        type: 'item',
-      }));
-    } else if (tab === 'items') {
-      const defs = ItemSystem.ITEM_DEFS;
-      items = Object.keys(defs).map((id) => ({
-        id: id,
-        icon: defs[id].icon,
-        name: defs[id].name,
-        desc: defs[id].description,
-        maxStack: defs[id].maxStack,
-        type: 'item',
+    } else if (tab === 'crisisevents') {
+      items = CrisisSystem.EVENTS.map((e) => ({
+        id: e.id,
+        icon: e.icon,
+        name: e.name,
+        desc: e.description,
+        duration: (e.duration / 1000).toFixed(0),
+        data: e,
+        type: 'crisisevent',
       }));
     } else if (tab === 'bosses') {
       items = BOSS_CONFIGS.map((b) => ({
@@ -760,6 +836,34 @@
       hideDebugPanel();
       window.eventBus.emit('notification', {
         message: `👑 已切换至 Boss 战「${item.icon} ${item.name}」`,
+        type: 'warning',
+      });
+    } else if (item.type === 'crisisevent') {
+      // 触发危机事件
+      if (!ge.crisisSystem) {
+        alert('危机事件系统未初始化');
+        return;
+      }
+      if (ge.crisisSystem._activeEvent) {
+        alert('当前已有活跃危机事件，请等待结束再触发新事件');
+        return;
+      }
+      // 直接触发指定危机事件
+      const eventDef = item.data;
+      ge.crisisSystem._activeEvent = {
+        def: eventDef,
+        endTime: Date.now() + eventDef.duration,
+      };
+      eventDef.apply(ge.crisisSystem);
+      window.eventBus.emit('crisis:started', {
+        id: eventDef.id,
+        name: eventDef.name,
+        icon: eventDef.icon,
+        description: eventDef.description,
+        duration: eventDef.duration,
+      });
+      window.eventBus.emit('notification', {
+        message: `⚠️ 已触发危机事件「${item.icon} ${item.name}」`,
         type: 'warning',
       });
     }

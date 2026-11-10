@@ -146,17 +146,20 @@ class AutoPlaySystem {
 
       // 优先级 2：自动合成相邻元素
       if (this._tryAutoMerge()) {
-        this._hungryCounter++;
+        this._hungryCounter = 0;
         return;
       }
 
-      // 饥饿保护：连续 3 次只合成不产元素时强制产一次
-      if (this._hungryCounter >= 3) {
+      // 无合成可做时增加空转计数，避免永远不产元素
+      this._idleCounter = (this._idleCounter || 0) + 1;
+
+      // 空转保护：连续多次无事可做时强制产元素（无论是否有订单）
+      if (this._idleCounter >= 5) {
         if (this._tryAutoSpawn()) {
-          this._hungryCounter = 0;
+          this._idleCounter = 0;
           return;
         }
-        // 仍无法产元素则继续合成
+        // 仍无法产元素（发射器冷却），继续等待
       }
 
       // 优先级 3：自动点击发射器
@@ -165,6 +168,7 @@ class AutoPlaySystem {
         return;
       }
 
+      // 仍无事可做，但保持运行状态等待条件满足
       this._hungryCounter = 0;
     } finally {
       this._processing = false;
@@ -228,6 +232,8 @@ class AutoPlaySystem {
       for (let c = 0; c < board[r].length; c++) {
         const el = board[r][c];
         if (!el || el._blocked) continue;
+        // 忽略混乱之核的干扰元素（不可合成）
+        if (el.isChaos) continue;
         const key = `${el.typeId}_${el.level}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push({ row: r, col: c, level: el.level });
@@ -299,7 +305,17 @@ class AutoPlaySystem {
   _tryAutoSpawn(force) {
     const orders = this.engine.systems.order.getOrders()
       .filter(o => !o.expired);
-    if (!force && orders.length === 0) return false;
+    if (!force && orders.length === 0) {
+      // 无订单时也允许产元素为将来做准备，但限制棋盘元素数量防止填满
+      let count = 0;
+      const board = this.engine.state.board;
+      for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+          if (board[r][c]) count++;
+        }
+      }
+      if (count > 18) return false;
+    }
 
     // 统计订单中各元素类型的需求量
     const demandMap = {};

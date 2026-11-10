@@ -82,7 +82,7 @@ class ItemSystem {
    * 启动自动获取定时器
    */
   _startAutoGrant() {
-    // 每 60 秒获得 1 个时间停滞
+    // 每 90 秒获得 1 个时间停滞
     this._timers.survival = setInterval(() => {
       this.addItem('time_freeze', 1);
       window.eventBus.emit('item:granted', {
@@ -91,9 +91,9 @@ class ItemSystem {
         reason: 'survival',
         items: this.getItemsAsArray(),
       });
-    }, 60000);
+    }, 90000);
 
-    // 每 90 秒获得 1 个元素风暴
+    // 每 120 秒获得 1 个元素风暴
     this._timers.storm = setInterval(() => {
       this.addItem('element_storm', 1);
       window.eventBus.emit('item:granted', {
@@ -102,7 +102,7 @@ class ItemSystem {
         reason: 'storm_timer',
         items: this.getItemsAsArray(),
       });
-    }, 90000);
+    }, 120000);
 
     // 监听订单提交事件：每提交 5 个订单获得 1 个立即完成
     this._onOrderSubmitted = (data) => {

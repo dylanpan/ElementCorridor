@@ -144,6 +144,7 @@
   /** 启动无尽模式 */
   function startEndlessMode() {
     hideMenuOverlay();
+    showEndlessStatusBar();
 
     // 重置肉鸽系统
     boonSystem.reset();
@@ -156,6 +157,8 @@
     gameEngine.boonSystem = boonSystem;
     gameEngine._guardianShieldUses = 0;
 
+    // 允许怒气祝福（无尽模式专属）
+    boonSystem.setAllowRageBoons(true);
     // 直接启动无尽模式
     gameEngine.startEndlessMode();
   }
@@ -175,6 +178,8 @@
     gameEngine.boonSystem = boonSystem;
     gameEngine._guardianShieldUses = 0;
 
+    // 禁止怒气祝福（肉鸽模式不提供怒气祝福）
+    boonSystem.setAllowRageBoons(false);
     // 先选初始祝福
     rogueUIManager.showInitialBoonSelect(() => {
       // 开始冒险
@@ -344,6 +349,31 @@
     if (headerLeft) headerLeft.style.display = 'none';
   }
 
+  /** 显示无尽模式左侧面板（无层级数和地图按钮） */
+  function showEndlessStatusBar() {
+    const rogueInfo = document.getElementById('rogue-level-info');
+    if (rogueInfo) rogueInfo.style.display = 'flex';
+    // 隐藏顶部标题
+    const headerLeft = document.querySelector('.header-left');
+    if (headerLeft) headerLeft.style.display = 'none';
+    // 隐藏层级数按钮和地图按钮
+    const floorBtn = document.getElementById('rogue-floor-btn');
+    if (floorBtn) floorBtn.style.display = 'none';
+    const mapBtn = document.getElementById('rogue-map-btn-side');
+    if (mapBtn) mapBtn.style.display = 'none';
+    // 将金币显示改造为按钮（商店入口）
+    const goldDisplay = document.querySelector('.rogue-gold-display');
+    if (goldDisplay) {
+      goldDisplay.style.cursor = 'pointer';
+      goldDisplay.title = '点击打开商店';
+      goldDisplay.onclick = function() {
+        if (gameEngine.endlessMode && gameEngine.endlessMode.shopSystem) {
+          gameEngine.endlessMode.shopSystem.toggleVisibility();
+        }
+      };
+    }
+  }
+
   /** 隐藏肉鸽模式左侧面板 */
   function hideRogueStatusBar() {
     const rogueInfo = document.getElementById('rogue-level-info');
@@ -362,8 +392,12 @@
     if (floorNum && rogueSystem) {
       floorNum.textContent = rogueSystem.getCurrentFloor();
     }
-    if (goldDisplay && rogueSystem) {
-      goldDisplay.textContent = rogueSystem.getGold();
+    if (goldDisplay) {
+      if (gameEngine && gameEngine._isEndlessMode && gameEngine.endlessMode && gameEngine.endlessMode.shopSystem) {
+        goldDisplay.textContent = gameEngine.endlessMode.shopSystem.getGold();
+      } else if (rogueSystem) {
+        goldDisplay.textContent = rogueSystem.getGold();
+      }
     }
 
     // 更新棋盘上方的祝福区域
@@ -479,6 +513,10 @@
     });
 
     window.eventBus.on('rogue:gold-updated', () => {
+      updateRogueStatusBar();
+    });
+
+    window.eventBus.on('endless:gold-updated', () => {
       updateRogueStatusBar();
     });
 

@@ -2450,12 +2450,18 @@ class GameEngine {
       // 冰霜女巫
 
       frozenRows: new Set(),
+      frozenCols: new Set(),
 
       _freezeRowTimeouts: {},
+      _freezeColTimeouts: {},
 
       lastFreezeTime: 0,
 
       thawMergeCount: 0,
+
+      thawProgressByRow: {},
+
+      thawProgressByCol: {},
 
       isBlizzardActive: false,
 
@@ -2477,7 +2483,7 @@ class GameEngine {
 
       lastDevourTime: 0,
 
-      lastDevourCellTime: 0,
+      lastDevourCellTime: Date.now(),
 
       timeLimit: config.mechanics.timeLimit || 120000,
 
@@ -2502,6 +2508,9 @@ class GameEngine {
       tempUnsealExpireAt: 0,        // 临时解封到期时间戳
 
       tempUnsealBoonObj: null,      // 缓存的祝福对象（用于重新封印时还原）
+
+      pendingScoreIncrease: 0,      // 上次解封时增加的分数（重新封印时减回）
+      _unsealingStarted: false,    // 是否已开始解封（防止 handler 重新封印）
 
     };
 
@@ -2533,6 +2542,8 @@ class GameEngine {
       if (!this._sealBoonsHandler) {
         this._sealBoonsHandler = () => {
           if (this._bossState && this._bossState.isActive && this.boonSystem) {
+            // 一旦开始解封，不再重新封印（防止全部解封后事件再次触发导致重新封印）
+            if (this._bossState._unsealingStarted) return;
             const laterBoons = this.boonSystem.getBoonSummary ? this.boonSystem.getBoonSummary() : [];
             if (laterBoons.length > 0 && this._bossState.sealedBoons.length === 0) {
               this._bossState.sealedBoons = laterBoons.map(b => b.id);
@@ -2937,9 +2948,19 @@ class GameEngine {
 
       this._unfreezeEmitters();
 
-      // 清除所有冻结行/列，防止立即再次触发暴风雪
+      // 清除所有冻结行/列，销毁被冻结的元素，防止立即再次触发暴风雪
 
       for (const row of [...state.frozenRows]) {
+
+        // 销毁该行中所有被冻结的元素
+        if (board && board[row]) {
+          for (let c = 0; c < board[row].length; c++) {
+            if (board[row][c]) {
+              board[row][c] = null;
+              if (this.boardRenderer) this.boardRenderer.updateCell(board, row, c);
+            }
+          }
+        }
 
         if (this.boardRenderer) {
 
@@ -2954,6 +2975,16 @@ class GameEngine {
       state.frozenRows.clear();
 
       for (const col of [...state.frozenCols]) {
+
+        // 销毁该列中所有被冻结的元素
+        if (board) {
+          for (let r = 0; r < board.length; r++) {
+            if (board[r] && board[r][col]) {
+              board[r][col] = null;
+              if (this.boardRenderer) this.boardRenderer.updateCell(board, r, col);
+            }
+          }
+        }
 
         if (this.boardRenderer) {
 
@@ -3009,7 +3040,7 @@ class GameEngine {
 
     // 3. 暴风雪触发：同时冻结行数 >= blizzardThreshold
 
-    if (state.frozenRows.size >= (mech.blizzardThreshold || 2) && !state.isBlizzardActive) {
+    if ((state.frozenRows.size + state.frozenCols.size) >= (mech.blizzardThreshold || 2) && !state.isBlizzardActive) {
 
       state.isBlizzardActive = true;
 
@@ -3021,7 +3052,7 @@ class GameEngine {
 
       window.eventBus.emit('notification', {
 
-        message: '❄ 冰霜女巫释放了暴风雪！所有发射器暂停 5 秒',
+        message: '❄ 冰霜女巫释放了暴风雪！所有发射器暂停 ' + ((mech.blizzardPauseDuration || 6100) / 1000).toFixed(0) + ' 秒',
 
         type: 'warning',
 
@@ -3077,6 +3108,18 @@ class GameEngine {
 
       }
 
+      // 越界保护
+
+      if (!board[row]) {
+
+        console.warn('[ICE_WITCH] board[' + row + '] is undefined, aborting freeze');
+
+        state.frozenRows.delete(row);
+
+        return;
+
+      }
+
       // 冻结该行的所有元素（视觉标记）
 
       for (let c = 0; c < board[row].length; c++) {
@@ -3091,18 +3134,6 @@ class GameEngine {
 
       window.eventBus.emit('boss:freeze-row', { row, duration });
 
-      // 越界保护
-
-      if (!board[row]) {
-
-        console.warn('[ICE_WITCH] board[' + row + '] is undefined, aborting freeze');
-
-        state.frozenRows.delete(row);
-
-        return;
-
-      }
-
       // duration ms 后自动解冻（销毁未解冻的元素）
 
       const self = this;
@@ -3112,6 +3143,18 @@ class GameEngine {
         const s = self._bossState;
 
         if (s.frozenRows.has(row)) {
+
+          // 先移除冻结状态，再触发解冻事件（播放粒子特效），最后销毁元素
+          // 顺序很重要：先删 frozenRows 再调 updateCell，避免重新添加 cell-frozen 类
+          s.frozenRows.delete(row);
+
+          if (self.boardRenderer) {
+
+            self.boardRenderer.frozenRows.delete(row);
+
+          }
+
+          window.eventBus.emit('boss:thaw-row', { row });
 
           // 销毁该行中所有被冻结的元素（未通过合成解冻）
           const board = self.state.board;
@@ -3123,16 +3166,6 @@ class GameEngine {
               }
             }
           }
-
-          s.frozenRows.delete(row);
-
-          if (self.boardRenderer) {
-
-            self.boardRenderer.frozenRows.delete(row);
-
-          }
-
-          window.eventBus.emit('boss:thaw-row', { row });
 
         }
 
@@ -3170,15 +3203,11 @@ class GameEngine {
 
       }
 
-      // 冻结该列的所有元素（视觉标记）
+      // 冻结该列的所有格子（视觉标记）
 
       for (let r = 0; r < rows; r++) {
 
-        if (board[r] && board[r][col]) {
-
-          this.boardRenderer.updateCell(board, r, col);
-
-        }
+        this.boardRenderer.updateCell(board, r, col);
 
       }
 
@@ -3206,6 +3235,17 @@ class GameEngine {
 
         if (s.frozenCols.has(col)) {
 
+          // 先移除冻结状态，再触发解冻事件（播放粒子特效），最后销毁元素
+          s.frozenCols.delete(col);
+
+          if (self.boardRenderer) {
+
+            self.boardRenderer.frozenCols.delete(col);
+
+          }
+
+          window.eventBus.emit('boss:thaw-col', { col });
+
           // 销毁该列中所有被冻结的元素（未通过合成解冻）
           const board = self.state.board;
           if (board) {
@@ -3216,16 +3256,6 @@ class GameEngine {
               }
             }
           }
-
-          s.frozenCols.delete(col);
-
-          if (self.boardRenderer) {
-
-            self.boardRenderer.frozenCols.delete(col);
-
-          }
-
-          window.eventBus.emit('boss:thaw-col', { col });
 
         }
 
@@ -3243,19 +3273,19 @@ class GameEngine {
 
     const state = this._bossState;
 
-    // 判断是行冻结还是列冻结
+    const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
+
+    // 判断是行冻结还是列冻结（按行/列独立计数）
 
     if (state.frozenRows.has(row)) {
 
-      state.thawMergeCount++;
+      state.thawProgressByRow[row] = (state.thawProgressByRow[row] || 0) + 1;
 
-      const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
-
-      if (state.thawMergeCount >= needed) {
+      if (state.thawProgressByRow[row] >= needed) {
 
         state.frozenRows.delete(row);
 
-        state.thawMergeCount = 0;
+        delete state.thawProgressByRow[row];
 
         if (this.boardRenderer) {
 
@@ -3275,15 +3305,13 @@ class GameEngine {
 
     if (state.frozenCols.has(col)) {
 
-      state.thawMergeCount++;
+      state.thawProgressByCol[col] = (state.thawProgressByCol[col] || 0) + 1;
 
-      const needed = this._currentBossConfig.mechanics.thawMergeCount || 2;
-
-      if (state.thawMergeCount >= needed) {
+      if (state.thawProgressByCol[col] >= needed) {
 
         state.frozenCols.delete(col);
 
-        state.thawMergeCount = 0;
+        delete state.thawProgressByCol[col];
 
         if (this.boardRenderer) {
 
@@ -3575,7 +3603,7 @@ class GameEngine {
 
   }
 
-  /** 吞噬一个匹配订单需求的格子 */
+  /** 吞噬一个格子（优先级：匹配订单 > 无属性 > 不匹配订单） */
 
   _devourCell() {
 
@@ -3591,9 +3619,13 @@ class GameEngine {
 
     if (orderTypes.size === 0) return;
 
-    // 收集棋盘上所有匹配订单类型的元素格子（排除已被吞噬的）
+    // 收集棋盘上所有未被吞噬的格子，按优先级分类
 
-    const candidates = [];
+    const matchCandidates = [];   // 优先级1：匹配订单类型
+
+    const basicCandidates = [];   // 优先级2：无属性元素
+
+    const fallbackCandidates = []; // 优先级3：不匹配订单的其他元素
 
     for (let r = 0; r < board.length; r++) {
 
@@ -3601,9 +3633,19 @@ class GameEngine {
 
         const el = board[r][c];
 
-        if (el && orderTypes.has(el.typeId) && !state.devouredCells.has(r + ',' + c)) {
+        if (!el || state.devouredCells.has(r + ',' + c)) continue;
 
-          candidates.push({ row: r, col: c });
+        if (orderTypes.has(el.typeId)) {
+
+          matchCandidates.push({ row: r, col: c, el: el });
+
+        } else if (el.typeId === 'basic') {
+
+          basicCandidates.push({ row: r, col: c, el: el });
+
+        } else {
+
+          fallbackCandidates.push({ row: r, col: c, el: el });
 
         }
 
@@ -3611,32 +3653,43 @@ class GameEngine {
 
     }
 
-    if (candidates.length === 0) {
+    // 按优先级选取目标
 
-      // 没有可吞噬的目标了
-      // 先检查棋盘是否完全为空（开局时棋盘空是正常状态，不触发失败）
-      let hasAnyElement = false;
-      for (let r = 0; r < board.length && !hasAnyElement; r++) {
-        for (let c = 0; c < board[r].length && !hasAnyElement; c++) {
-          if (board[r][c]) hasAnyElement = true;
-        }
-      }
-      if (!hasAnyElement) return;
+    let pool = matchCandidates;
 
-      // 棋盘上有元素但没有匹配订单类型的了，且未达标 → 失败
-      if (this.state.score < this.state.targetScore) {
+    let poolLabel = '匹配订单';
 
+    if (pool.length === 0) {
+
+      pool = basicCandidates;
+
+      poolLabel = '无属性';
+
+    }
+
+    if (pool.length === 0) {
+
+      pool = fallbackCandidates;
+
+      poolLabel = '不匹配订单';
+
+    }
+
+    if (pool.length === 0) {
+
+      // 棋盘完全为空：如果已经吞噬过元素，触发判负
+      if (state.devouredCells.size > 0) {
         this._onBossDefeat('时间吞噬者吞噬了所有可用元素！');
-
+        return;
       }
-
+      // 开局棋盘为空，不触发失败
       return;
 
     }
 
     // 随机选择一个格子吞噬
 
-    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const target = pool[Math.floor(Math.random() * pool.length)];
 
     const el = board[target.row][target.col];
 
@@ -3684,15 +3737,7 @@ class GameEngine {
 
     const state = this._bossState;
 
-    // 1. 检查当前临时解封的祝福是否到期
-
-    if (state.tempUnsealedBoon && now >= state.tempUnsealExpireAt) {
-
-      this._reSealBoon();
-
-    }
-
-    // 2. 祝福解封：每 unsealInterval ms 随机临时解封一个祝福
+    // 1. 祝福解封（永久解锁）：每 unsealInterval ms 永久解锁一个祝福
 
     if (state.sealedBoons.length > 0 && now - state.lastUnsealTime > (mech.unsealInterval || 8000)) {
 
@@ -3702,7 +3747,7 @@ class GameEngine {
 
     }
 
-    // 3. 镜像召唤：每 mirrorInterval ms 召唤一个镜像
+    // 2. 镜像召唤：每 mirrorInterval ms 召唤一个镜像
 
     if (now - state.lastMirrorTime > (mech.mirrorInterval || 20000)) {
 
@@ -3739,6 +3784,18 @@ class GameEngine {
     // 将该祝福放回封印列表
 
     state.sealedBoons.push(boonId);
+
+    // 重新封印：减去之前解封时增加的目标分
+
+    if (state.pendingScoreIncrease > 0) {
+
+      this.state.targetScore = Math.max(this.state.targetScore - state.pendingScoreIncrease, this.state.score);
+
+      state.pendingScoreIncrease = 0;
+
+      window.eventBus.emit('score:updated', { score: this.state.score, targetScore: this.state.targetScore });
+
+    }
 
     // 还原发射器修饰器（移除该祝福的效果）
 
@@ -3794,23 +3851,9 @@ class GameEngine {
 
     if (state.sealedBoons.length === 0) return;
 
-    // 如果当前已有临时解封的祝福，直接替换（不触发中间的全封印事件，避免闪烁）
+    state._unsealingStarted = true;
 
-    if (state.tempUnsealedBoon) {
-
-      // 将旧祝福放回封印列表（不触发事件）
-
-      state.sealedBoons.push(state.tempUnsealedBoon);
-
-      state.tempUnsealedBoon = null;
-
-      state.tempUnsealExpireAt = 0;
-
-      state.tempUnsealBoonObj = null;
-
-    }
-
-    // 随机选择一个祝福解封
+    // 永久解锁模式：随机选择一个祝福永久解封
 
     const randomIndex = Math.floor(Math.random() * state.sealedBoons.length);
 
@@ -3818,15 +3861,7 @@ class GameEngine {
 
     state.sealedBoons.splice(randomIndex, 1);
 
-    // 记录临时解封状态
-
-    state.tempUnsealedBoon = boonId;
-
-    const unsealDuration = this._currentBossConfig?.mechanics?.unsealDuration || 10000;
-
-    state.tempUnsealExpireAt = Date.now() + unsealDuration;
-
-    // 解封祝福：动态增加目标分
+    // 解封祝福：动态增加目标分（累加不恢复）
 
     const mech = this._currentBossConfig?.mechanics;
 
@@ -3866,20 +3901,17 @@ class GameEngine {
 
       if (boonObj && boonObj.apply && boonObj.category === 'production') {
 
-
         boonObj.apply(this.state.emitters);
-
-        state.tempUnsealBoonObj = boonObj;
 
       }
 
     }
 
-    window.eventBus.emit('boss:boon-unsealed', { boonId, temporary: true, duration: unsealDuration });
+    window.eventBus.emit('boss:boon-unsealed', { boonId, temporary: false });
 
     window.eventBus.emit('notification', {
 
-      message: `🌟 祝福「${boonId}」被临时解封！`,
+      message: `🔓 祝福「${boonId}」被永久解封！目标分增加 ${percent}%`,
 
       type: 'info',
 
@@ -4072,6 +4104,55 @@ class GameEngine {
   _onBossVictory() {
 
     this._bossState.isActive = false;
+
+    // 创世之灵：通关后解封所有剩余祝福，确保下次进入重新触发封印
+    if (this._bossState.bossId === 'boss_creation_spirit' && this.boonSystem) {
+      // 解封所有剩余祝福
+      while (this._bossState.sealedBoons.length > 0) {
+        this._unsealNextBoon();
+      }
+      this.boonSystem.sealedBoons = [];
+    }
+
+    // 冰霜女巫：清除所有残留的冻结定时器，销毁被冻结的元素，防止下一关触发解冻特效
+    if (this._bossState.bossId === 'boss_ice_witch') {
+      for (const key in this._bossState._freezeRowTimeouts) {
+        clearTimeout(this._bossState._freezeRowTimeouts[key]);
+      }
+      for (const key in this._bossState._freezeColTimeouts) {
+        clearTimeout(this._bossState._freezeColTimeouts[key]);
+      }
+      this._bossState._freezeRowTimeouts = {};
+      this._bossState._freezeColTimeouts = {};
+      // 销毁被冻结行/列上的元素
+      const board = this.state.board;
+      for (const row of [...this._bossState.frozenRows]) {
+        if (board && board[row]) {
+          for (let c = 0; c < board[row].length; c++) {
+            if (board[row][c]) {
+              board[row][c] = null;
+              if (this.boardRenderer) this.boardRenderer.updateCell(board, row, c);
+            }
+          }
+        }
+        if (this.boardRenderer) this.boardRenderer.frozenRows.delete(row);
+        window.eventBus.emit('boss:thaw-row', { row });
+      }
+      for (const col of [...this._bossState.frozenCols]) {
+        if (board) {
+          for (let r = 0; r < board.length; r++) {
+            if (board[r] && board[r][col]) {
+              board[r][col] = null;
+              if (this.boardRenderer) this.boardRenderer.updateCell(board, r, col);
+            }
+          }
+        }
+        if (this.boardRenderer) this.boardRenderer.frozenCols.delete(col);
+        window.eventBus.emit('boss:thaw-col', { col });
+      }
+      this._bossState.frozenRows.clear();
+      this._bossState.frozenCols.clear();
+    }
 
     window.eventBus.emit('boss:victory', {
 
@@ -6855,9 +6936,9 @@ class GameEngine {
 
     this.state.score += reward;
 
-    // === 怒气获取：提交订单 +12 ===
+    // === 怒气获取：提交订单 +12（仅无尽模式） ===
 
-    if (this.isRogueMode) {
+    if (this._isEndlessMode) {
 
       this._addRage(12);
 

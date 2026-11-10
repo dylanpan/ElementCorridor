@@ -289,14 +289,17 @@ class OrderSystem {
    * @returns {object|null} - { cost, newOrders } 或 null（积分不足）
    */
   refreshOrders(score, free = false) {
+    // 保留加急订单（不受刷新影响，直至自身倒计时结束）
+    const rushOrders = this.orders.filter(o => o.isRush);
+
     if (!free) {
       const cost = GAME_SETTINGS.orderRefreshCost;
       if (score < cost) return null;
-      this.orders = [];
+      this.orders = rushOrders;
       const newOrders = this.fillOrders();
       return { cost, newOrders };
     } else {
-      this.orders = [];
+      this.orders = rushOrders;
       const newOrders = this.fillOrders();
       return { cost: 0, newOrders };
     }

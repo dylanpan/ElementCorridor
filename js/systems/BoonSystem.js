@@ -50,6 +50,16 @@ class BoonSystem {
       splitFlow: false,
       myriadSource: false,
     };
+    /** 是否允许怒气祝福（仅无尽模式开启，肉鸽模式关闭） */
+    this._allowRageBoons = false;
+  }
+
+  /**
+   * 设置是否允许怒气祝福
+   * @param {boolean} allow
+   */
+  setAllowRageBoons(allow) {
+    this._allowRageBoons = allow;
   }
 
   /** 获取当前祝福列表 */
@@ -233,11 +243,11 @@ class BoonSystem {
    * @param {string} [forceRarity] - 强制指定稀有度
    * @returns {Array} 候选祝福配置
    */
-  pickRandomBoons(count = 3, forceRarity = null, excludeRage = false) {
+  pickRandomBoons(count = 3, forceRarity = null) {
     const excludeIds = this.boons.map(b => b.id);
     let candidates = BOON_POOL.filter(b => !excludeIds.includes(b.id));
-    // 排除怒气祝福（肉鸽模式不提供怒气相关祝福）
-    if (excludeRage) {
+    // 排除怒气祝福（仅无尽模式允许怒气祝福）
+    if (!this._allowRageBoons) {
       candidates = candidates.filter(b => !b.id.startsWith('boon_rage_'));
     }
     
@@ -506,6 +516,16 @@ class BoonSystem {
       splitFlow: false,
       myriadSource: false,
     };
+    /** 是否允许怒气祝福（仅无尽模式开启，肉鸽模式关闭） */
+    this._allowRageBoons = false;
+  }
+
+  /**
+   * 设置是否允许怒气祝福
+   * @param {boolean} allow
+   */
+  setAllowRageBoons(allow) {
+    this._allowRageBoons = allow;
   }
 
   /**

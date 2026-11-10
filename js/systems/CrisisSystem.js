@@ -200,12 +200,60 @@ class CrisisSystem {
     // 还原事件效果
     eventDef.revert(this);
 
+    // 危机事件结束后有概率奖励祝福或道具
+    this._tryGrantReward(eventDef);
+
     this._activeEvent = null;
-    this._immuneUntil = Date.now() + 10000; // 10 秒免疫
+    this._immuneUntil = Date.now() + 13000; // 13 秒免疫
 
     window.eventBus.emit('crisis:ended', {
       id: eventDef.id,
     });
+  }
+
+  /**
+   * 危机事件结束后尝试发放奖励
+   * 20% 概率获得一个随机普通祝福，20% 概率获得一个随机道具
+   */
+  _tryGrantReward(eventDef) {
+    const roll = Math.random();
+    if (roll < 0.20) {
+      // 20%: 获得一个随机普通祝福
+      if (this.engine.boonSystem && typeof this.engine.boonSystem.pickRandomBoons === 'function') {
+        const boons = this.engine.boonSystem.pickRandomBoons(1, 'common');
+        if (boons && boons.length > 0) {
+          const added = this.engine.boonSystem.addBoon(boons[0]);
+          if (added) {
+            window.eventBus.emit('crisis:reward', {
+              type: 'boon',
+              boon: boons[0],
+              eventName: eventDef.name,
+            });
+            window.eventBus.emit('notification', {
+              message: '✨ 危机过后获得祝福！' + (boons[0].icon || '') + ' ' + boons[0].name,
+              type: 'reward',
+            });
+          }
+        }
+      }
+    } else if (roll < 0.40) {
+      // 20%: 获得一个随机道具（跳过订单/时间停滞/元素风暴）
+      if (this.engine.itemSystem) {
+        const pool = ['skip_order', 'time_freeze', 'element_storm'];
+        const itemId = pool[Math.floor(Math.random() * pool.length)];
+        this.engine.itemSystem.addItem(itemId, 1);
+        const def = ItemSystem.ITEM_DEFS[itemId];
+        window.eventBus.emit('crisis:reward', {
+          type: 'item',
+          itemId: itemId,
+          eventName: eventDef.name,
+        });
+        window.eventBus.emit('notification', {
+          message: '🎁 危机过后获得道具！' + (def ? def.icon + ' ' + def.name : itemId),
+          type: 'reward',
+        });
+      }
+    }
   }
 
   /**

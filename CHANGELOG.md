@@ -1,3 +1,215 @@
+## v74 (2026-11-10)
+
+### ✨ 新功能
+
+**无尽模式·商店系统**
+- **新增无尽模式商店系统**：玩家可通过金币在商店购买道具、祝福等商品，丰富无尽模式玩法
+- **商店入口**：左侧面板金币显示改造为按钮，点击打开商店面板；肉鸽模式下点击金币数无效
+- **金币获取途径**：Boss 击败奖励 10~20 金币（按难度递增）、每 60 秒存活奖励 3 金币
+- **商品刷新机制**：每 90 秒自动刷新，3 个商品（2 普通 + 1 稀有），手动刷新花费 5 金币（冷却 30 秒）
+- **普通商品池**：跳过订单(8💰)、时间停滞(10💰)、元素风暴(12💰)、积分护盾(15💰)、发射器加速(10💰)
+- **稀有商品池**：立即完成(15💰)、双倍积分(20💰)、祝福宝箱(25💰)、时间缓流(18💰)、元素净化(22💰)
+- 涉及：`js/systems/EndlessShopSystem.js`、`js/systems/EndlessMode.js`、`js/main.js`、`index.html`、`css/style.css`
+
+---
+
+## v73 (2026-11-10)
+
+### 🐛 Bug 修复
+
+**无尽模式·危机事件UI未销毁**
+- **危机事件结束后横幅UI未销毁**：`crisis:ended` 事件监听器为空函数，未调用 `_hideCrisisBanner()`，导致横幅残留、阻挡后续事件触发
+- 涉及：`js/ui/UIManager.js`
+
+**无尽模式·危机事件UI宽度适配**
+- **危机事件横幅超出棋盘宽度**：原 `white-space: nowrap` + `min-width: 328px` 导致横幅远超棋盘宽度（480px）；已改为 `max-width: 480px; width: 90%`，内部使用 `flex-wrap` 自适应换行，适配不同屏幕尺寸
+- 涉及：`css/style.css`
+
+---
+
+## v72 (2026-11-10)
+
+### ✨ 新功能
+
+**无尽模式·危机事件联动奖励**
+- **危机事件结束后有概率奖励祝福或道具**：每次危机事件结束时，20% 概率获得一个随机普通祝福，20% 概率获得一个随机道具（跳过订单/时间停滞/元素风暴）
+- 涉及：`js/systems/CrisisSystem.js`
+
+**无尽模式·道具周期性获取间隔调整**
+- **道具获取间隔调长**：时间停滞从每 60 秒调整为每 90 秒，元素风暴从每 90 秒调整为每 120 秒，降低道具溢出感，提升道具的战略价值
+- 涉及：`js/systems/ItemSystem.js`
+
+---
+
+## v71 (2026-11-10)
+
+### ✨ 新功能
+
+**无尽模式·Boss 三层缩放机制**
+- **实现**：Boss 效果随轮次线性增强（scale 0→1），后期支持多 Boss 同时出现
+  - Phase 1（cycle < half）：1 个 Boss 顺序轮换，效果从基础值增长至 50%
+  - 里程碑 1（cycle == half）：2 个 Boss 随机抽取（不重复），效果 50%
+  - Phase 2（half < cycle < max）：1 个 Boss 顺序轮换，效果从 50% 增长至 100%
+  - 里程碑 2（cycle == max）：3 个 Boss 随机抽取（不重复），效果 100%
+  - Phase 3（cycle > max）：随机 1~5 个 Boss，效果 100%（满值）
+- **各 Boss 效果缩放**：熔岩巨像灼烧 2→6 格、冰霜女巫冻结 1→3 行、混沌之核扰动 3→8 个、时间吞噬者加速 0%→110%、创世之灵封印 1→3 个发射器
+- 涉及：`js/systems/EndlessMode.js`
+
+**无尽模式·Boss 预警 UI 增强**
+- **实现**：Boss 预警信息移至积分区域上方（board-top-bar），支持多 Boss 纵向排列展示
+- 涉及：`js/ui/UIManager.js`、`css/style.css`
+
+---
+
+## v70 (2026-11-09)
+
+### 🐛 Bug 修复
+
+**无尽模式·endless:level-up 事件监听器报错**
+- **根因**：UIManager.js 中注册了 `endless:level-up` 事件监听，但 `_onEndlessLevelUp` 方法从未定义，导致事件触发时报 `TypeError: this._onEndlessLevelUp is not a function`
+- **修复**：在 UIManager.js 末尾添加 `_onEndlessLevelUp` 方法，显示难度提升通知
+- 涉及：`js/ui/UIManager.js`
+
+---
+
+## v69 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**创世之灵·全部解封后又被重新封印**
+- **根因**：`_sealBoonsHandler` 监听 `rogue:boons-updated` 事件，全部解封后该事件再次触发时，handler 检测到 `sealedBoons.length === 0` 且 `laterBoons.length > 0`，重新封印了所有祝福
+- **修复**：添加 `_unsealingStarted` 标记，一旦开始解封 handler 即跳过，不再重新封印
+- 涉及：`js/core/GameEngine.js`
+
+---
+
+## v68 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**创世之灵·祝福在封印解封中循环**
+- **根因 1**：`_tickCreationSpirit` 中第 2 个代码块本应是镜像召唤逻辑，但被错误复制成了解封逻辑，导致每次间隔解封两次
+- **根因 2**：`_onBossVictory` 仅清空了 `sealedBoons` 数组，未实际解封剩余祝福，通关后剩余祝福仍处于封印状态
+- **修复**：删除重复的解封块；通关时循环调用 `_unsealNextBoon()` 解封所有剩余祝福
+- 涉及：`js/core/GameEngine.js`
+
+---
+
+## v67 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**冰霜女巫·列冻结格子特效未销毁**
+- **根因**：UIManager.js 中缺少 `boss:freeze-col` 和 `boss:thaw-col` 事件监听注册，导致列冻结/解冻时视觉特效从未生效
+- **修复**：在事件注册区添加 `boss:freeze-col` 和 `boss:thaw-col` 监听，分别绑定 `_onBossFreezeCol` 和 `_onBossThawCol` 方法
+- 涉及：`js/ui/UIManager.js`
+
+---
+
+## v66 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**冰霜女巫·冻结倒计时结束后视觉特效未销毁**
+- **根因**：销毁回调中先调 updateCell（此时 frozenRows 还在，又加回 cell-frozen 类），再删冻结状态、触发解冻事件，导致冻结特效残留且无粒子特效
+- **修复**：调整销毁顺序——先移除冻结状态并触发解冻事件（播放粒子碎裂特效），再销毁元素
+- 涉及：`js/core/GameEngine.js`
+
+---
+
+## v65 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**冰霜女巫·冻结倒计时结束后元素未销毁**
+- **根因**：暴风雪结束时清除了所有冻结定时器（clearTimeout），但未销毁被冻结行/列上的元素，导致元素永远留在棋盘上；通关清理时也存在同样问题
+- 涉及：`js/core/GameEngine.js`
+
+---
+
+## v64 (2026-11-06)
+
+### ✨ 新功能
+
+**版本号点击弹窗展示更新日志**
+- **CHANGELOG 弹窗**：点击页面左上角版本号徽章（v64），弹出弹窗展示完整的更新日志内容
+- **Markdown 格式化渲染**：版本标题金色显示、子标题绿色显示、列表项带圆点、加粗文本保留
+- **弹窗可滚动**：最大高度 65vh，超出内容可滚动查看
+- 涉及：`index.html`、`UIManager.js`、`style.css`、`js/data/changelog-data.js`（新增）
+
+---
+
+## v63 (2026-11-06)
+
+### 🐛 Bug 修复
+
+**冰霜女巫·冻结特效与解冻机制修复**
+- **竖列冻结特效**：列冻结时不再过滤空格子，整列所有格子都渲染冻结特效
+- **冻结时间到元素销毁**：修复行冻结越界保护在循环之后的问题，确保冻结到期后元素被正确销毁
+- **合成解冻独立计数**：`thawMergeCount` 从全局计数改为按行/列独立计数（`thawProgressByRow` / `thawProgressByCol`），修复不同行/列的合成互相干扰问题
+- 涉及：`GameEngine.js`
+
+**创世之灵·封印机制重制**
+- **修复封印延续到下一关**：`_onBossVictory` 中清除 `boonSystem.sealedBoons`，确保下次进入 Boss 关卡重新触发封印
+- **永久解锁模式**：移除临时解封→重新封印循环，改为每固定时间永久解锁一个祝福，目标分累加不恢复
+- 涉及：`GameEngine.js`
+
+**时间吞噬者·判负规则与UI描述更新**
+- **判负双条件**：倒计时耗尽 **或** 棋盘元素全部被吞噬完，满足任意一条即判负
+- **修复初始吞噬延迟**：`lastDevourCellTime` 初始化为 `Date.now()`，修复 Boss 战一开始就立即吞噬的问题
+- **Boss栏描述更新**：更新 UI 描述为「倒计时结束判负」和「所有元素被吞噬完判负」
+- 涉及：`GameEngine.js`、`UIManager.js`
+
+---
+
+## v62 (2026-11-05)
+
+### 🐛 Bug 修复
+
+**冰霜女巫·冻结系统优化**
+- **行/列随机冻结**：`_freezeRandomRow` 改为 `_freezeRandomLine`，每次随机选择行或列（50% 概率），新增 `frozenCols` 集合和 `_freezeColTimeouts` 定时器
+- **冻结元素销毁**：行/列冻结时间到后，setTimeout 回调中先遍历该行/列所有格子销毁残留元素（设为 null）再解除冻结状态
+- **Boss 失败销毁**：`_onBossDefeat` 检测 `boss_ice_witch`，遍历冻结行和冻结列中的格子销毁残留元素
+- 涉及：`GameEngine.js`、`BoardRenderer.js`
+
+**怒气系统隔离修复**
+- **修复肉鸽模式获取怒气祝福**：BoonSystem.js 新增 `_allowRageBoons` 状态和 `setAllowRageBoons` 方法，`pickRandomBoons` 自动根据状态过滤；`main.js` 中 `startEndlessMode` 设为 true、`startRogueMode` 设为 false
+- **修复肉鸽模式弹出怒气 tips**：`_onOrderClicked` 中怒气获取条件从 `this.isRogueMode` 改为 `this._isEndlessMode`
+- 涉及：`BoonSystem.js`、`GameEngine.js`、`main.js`、`RogueUIManager.js`
+
+**自动合成系统修复**
+- **修复自动合成只执行一次就停止**：按钮从 `index.html` header 移至发射器栏动态创建；`_updateAutoMergeButton` 使用实时 DOM 查询；`_onEmitterClick` 末尾添加 autoPlay 恢复逻辑；`_onCellClick` 所有 return 路径添加 autoPlay 恢复逻辑
+- **自动合成忽略混乱之核干扰元素**：`_tryAutoMerge` 分组循环中过滤 `isChaos` 元素
+- 涉及：`AutoPlaySystem.js`、`GameEngine.js`、`UIManager.js`、`index.html`
+
+**经典模式与UI修复**
+- **删除经典模式**：删除 `index.html` 中关卡显示和新游戏/存档/读档按钮；删除 `main.js` 中经典模式事件绑定和 UI 切换；删除 `GameEngine.js` 中 `startLevel`/`save`/`load`/`hasSave`/`loadFromSave` 方法
+- **修复肉鸽模式道具栏显示**：非无尽模式隐藏整个 `#item-section`（含标题）
+- **修复 .header-right 空指针**：清理 `main.js` 中访问已删除的 `.header-right` 元素的代码
+- **初始积分配置化**：`gameConfig.js` 添加 `initialScore: 10`，仅第一层第一关生效
+- 涉及：`GameEngine.js`、`main.js`、`index.html`、`gameConfig.js`
+
+**积分与结算修复**
+- **修复无属性元素提交积分计算**：`_trySubmitWithBasicElement` 改为使用 `order.reward`，移除内部倍率乘法，避免双重倍率
+- **修复 _onBossDefeat 调用不存在方法**：替换为 `window.eventBus.emit('game:failed', ...)`
+- 涉及：`GameEngine.js`
+
+### ✨ 新功能
+- **调试面板新增 UI 辅助线开关**：`DebugTool.js` 添加 `_debugOverlaysEnabled` 变量和 `toggleDebugOverlays()` 函数，CSS 样式写入 `style.css`
+- **调试工具新增「危机事件」页签**：`DebugTool.js` 新增 `crisisevents` 页签，支持点击触发指定危机事件
+- **自动合成按钮移至发射器栏**：`UIManager.js` 的 `createEmitterButtons` 中动态创建，位于发射器按钮下方
+- **左侧 Boss 栏补充创世之灵机制说明**：`UIManager.js` `updateBossSkillsPanel` 新增「波动」描述——祝福解封时目标分 +18%，重新封印时恢复
+
+### 🎨 UI 优化
+- **创世之灵棋盘 UI 缩放适配**：`BoardRenderer.js` `init()` 中列数 ≥ 10 时自动添加 `board-compact` class，触发紧凑模式——格子最小高度 40px、图标 1.3rem、间距 4px，确保 10 列棋盘在 480px 容器内完整显示
+- 涉及：`BoardRenderer.js`、`style.css`
+
+### 🔧 技术改进
+- **修复创世之灵目标分无限增长**：Boss 状态新增 `pendingScoreIncrease` 字段；`_unsealNextBoon()` 解封时记录增加分数；`_reSealBoon()` 重新封印时减去之前增加的分数（最低不低于当前得分），使目标分随祝福解封波动而非单向指数增长
+- 涉及：`GameEngine.js`
+
+---
+
 ## v61 (2026-11-02)
 
 ### ✨ 新功能

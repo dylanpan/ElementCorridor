@@ -4111,6 +4111,31 @@ body {
   50% { opacity: 0.3; }
 }
 
+/* 吞噬闪光 */
+.devour-flash {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(179, 68, 230, 0.33) 26%, rgba(110, 38, 163, 0.18) 56%, transparent 76%);
+  transition: opacity 0.06s ease;
+}
+.devour-flash.show {
+  opacity: 1;
+}
+
+/* 棋盘震动 */
+.board-shake {
+  animation: boardShake 0.31s ease-out;
+}
+@keyframes boardShake {
+  0% { transform: translate(0, 0); }
+  44% { transform: translate(-3px, 2px); }
+  69% { transform: translate(3px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
 /* 被吞噬列 */
 .cell-devoured {
   animation: devourVanish 0.6s ease-out forwards;
@@ -4425,19 +4450,21 @@ body {
 .crisis-banner {
   position: fixed;
   top: 54px;
-  left: 53%;
+  left: 50%;
   transform: translateX(-50%) translateY(-320%);
   background: linear-gradient(135deg, rgba(182, 40, 36, 0.925), rgba(212, 73, 38, 0.825));
   border: 1px solid rgba(236, 101, 56, 0.525);
   border-radius: 10px;
-  padding: 10px 22px;
+  padding: 10px 16px;
   z-index: 920;
   backdrop-filter: blur(6px);
   box-shadow: 0 4px 24px rgba(184, 42, 30, 0.355), 0 0 74px rgba(218, 62, 31, 0.095);
   transition: transform 0.365s cubic-bezier(0.078, 0.822, 0.064, 1.002), opacity 0.285s;
   opacity: 0;
   pointer-events: none;
-  white-space: nowrap;
+  max-width: 480px;
+  width: 90%;
+  box-sizing: border-box;
 }
 .crisis-banner.show {
   transform: translateX(-50%) translateY(0);
@@ -4450,10 +4477,12 @@ body {
 .crisis-banner-inner {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 .crisis-icon {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
 }
 .crisis-name {
@@ -4461,16 +4490,21 @@ body {
   font-size: 14px;
   color: #fff;
   letter-spacing: 0.312px;
+  white-space: nowrap;
 }
 .crisis-desc {
   font-size: 12px;
   color: rgba(252, 214, 187, 0.905);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 .crisis-timer {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 662;
   color: #ffe082;
-  min-width: 328px;
+  min-width: 32px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -4511,9 +4545,19 @@ body {
 }
 .boss-warning-content {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  white-space: nowrap;
+  gap: 6px;
+}
+.boss-warning-bosses {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.boss-warning-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
 }
 .boss-warning-icon {
   font-size: 22px;
@@ -4555,4 +4599,296 @@ body {
 }
 .debug-overlays .game-board {
   outline: 2px dashed #ff0000;
+}
+
+/* ==================== 紧凑棋盘模式（10列及以上） ==================== */
+.board-compact {
+  gap: 4px;
+  padding: 8px;
+}
+
+.board-compact .board-cell {
+  min-height: 40px;
+  border-radius: 7px;
+  border-width: 1.5px;
+}
+
+.board-compact .board-cell .element-icon {
+  font-size: 1.3rem;
+}
+
+.board-compact .board-cell .element-level {
+  font-size: 0.5rem;
+  margin-top: 1px;
+}
+
+.board-compact .board-cell.selected {
+  transform: scale(1.03);
+}
+
+/* ==================== CHANGELOG 弹窗样式 ==================== */
+.changelog-scroll {
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 0 8px;
+  text-align: left;
+  scrollbar-width: thin;
+  scrollbar-color: #4a6fa5 transparent;
+}
+.changelog-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.changelog-scroll::-webkit-scrollbar-thumb {
+  background: #4a6fa5;
+  border-radius: 3px;
+}
+.cl-version {
+  color: #ffd700;
+  font-size: 1.1rem;
+  margin: 16px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #2a3a5c;
+}
+.cl-subtitle {
+  color: #81c784;
+  font-size: 0.95rem;
+  margin: 10px 0 6px 0;
+}
+.cl-list {
+  margin: 4px 0 8px 0;
+  padding-left: 20px;
+  list-style: none;
+}
+.cl-list li {
+  color: #c8d6e5;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin-bottom: 2px;
+  position: relative;
+}
+.cl-list li::before {
+  content: '•';
+  color: #4a6fa5;
+  position: absolute;
+  left: -14px;
+}
+.cl-list li strong {
+  color: #e8e8e8;
+}
+.cl-divider {
+  border: none;
+  border-top: 1px dashed #2a3a5c;
+  margin: 12px 0;
+}
+.cl-text {
+  color: #8899aa;
+  font-size: 0.82rem;
+  margin: 4px 0;
+}
+
+
+/* ============================================================
+   无尽模式 · 商店面板样式
+   ============================================================ */
+
+/* 商店遮罩层 */
+.shop-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: shop-fade-in 0.26s ease-out;
+}
+
+@keyframes shop-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 商店对话框 */
+.shop-dialog {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(255, 215, 0, 0.33);
+  border-radius: 14px;
+  padding: 24px;
+  width: 440px;
+  max-width: 92vw;
+  max-height: 82vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 38px rgba(0, 0, 0, 0.58), 0 0 48px rgba(255, 193, 56, 0.09);
+  animation: shop-slide-in 0.29s ease-out;
+}
+
+@keyframes shop-slide-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* 商店标题栏 */
+.shop-dialog h2 {
+  margin: 0;
+  font-size: 19px;
+  color: #ffd700;
+  letter-spacing: 1px;
+}
+
+/* 商店关闭按钮 */
+#shop-close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+#shop-close-btn:hover {
+  background: rgba(255, 77, 79, 0.34);
+  color: #ff4d4f;
+}
+
+/* 商品网格 */
+.shop-items-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* 单个商品卡片 */
+.shop-item-card {
+  position: relative;
+  background: rgba(46, 43, 62, 0.44);
+  border: 1px solid rgba(119, 111, 163, 0.37);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 0.195s, box-shadow 0.198s, border-color 0.197s;
+  text-align: center;
+}
+.shop-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 16px rgba(201, 170, 54, 0.42);
+  border-color: rgba(241, 196, 67, 0.57);
+}
+.shop-item-card[style*="not-allowed"] {
+  opacity: 0.47;
+  filter: grayscale(61%);
+}
+.shop-item-card[style*="not-allowed"]:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(128, 123, 140, 0.74);
+}
+
+/* 稀有商品标签 */
+.shop-item-card .rare-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: linear-gradient(135deg, #ffd700, #ff9800);
+  color: #1a1a2e;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+}
+
+/* 商品图标 */
+.shop-item-icon {
+  font-size: 26px;
+  text-align: center;
+  margin-bottom: 7px;
+  line-height: 1.2;
+}
+
+/* 商品名称 */
+.shop-item-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #eee;
+  text-align: center;
+  margin-bottom: 3px;
+}
+
+/* 商品描述 */
+.shop-item-desc {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+  margin-bottom: 9px;
+  line-height: 1.35;
+}
+
+/* 商品价格按钮 */
+.shop-item-price {
+  display: inline-block;
+  background: linear-gradient(135deg, #ffd700, #ff9800);
+  color: #1a1a2e;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  transition: transform 0.137s;
+}
+.shop-item-card:hover .shop-item-price {
+  transform: scale(1.03);
+}
+
+/* 商店底部工具栏 */
+.shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(161, 153, 189, 0.186);
+}
+
+/* 刷新按钮 */
+#shop-refresh-btn {
+  background: linear-gradient(135deg, #666, #555);
+  color: #ddd;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.178s, color 0.179s;
+}
+#shop-refresh-btn:hover {
+  background: linear-gradient(135deg, #777, #666);
+  color: #fff;
+}
+
+/* 刷新倒计时 */
+.shop-refresh-timer {
+  font-size: 12px;
+  color: #999;
+}
+
+/* 空商品提示 */
+.shop-empty {
+  text-align: center;
+  padding: 24px 0;
+  color: #777;
+  font-size: 14px;
+}
+
+/* 响应式：窄屏单列 */
+@media (max-width: 520px) {
+  .shop-dialog {
+    width: 94vw;
+    padding: 16px;
+  }
+  .shop-items-grid {
+    grid-template-columns: 1fr;
+  }
 }

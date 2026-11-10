@@ -26,6 +26,7 @@ class UIManager {
   init() {
     this._cacheElements();
     this._setupEventListeners();
+    this._initVersionBadge();
   }
 
   /** 缓存常用DOM元素 */
@@ -265,6 +266,12 @@ class UIManager {
     window.eventBus.on('boss:thaw-row', (data) => {
       this._onBossThawRow(data);
     });
+    window.eventBus.on('boss:freeze-col', (data) => {
+      this._onBossFreezeCol(data);
+    });
+    window.eventBus.on('boss:thaw-col', (data) => {
+      this._onBossThawCol(data);
+    });
     window.eventBus.on('boss:blizzard-started', (data) => {
       this._onBossBlizzardStarted(data);
     });
@@ -316,7 +323,8 @@ class UIManager {
       this._showCrisisBanner(data);
     });
     window.eventBus.on('crisis:ended', () => {
-          });
+      this._hideCrisisBanner();
+    });
 
     // === 无尽模式事件 ===
     window.eventBus.on('endless:started', (data) => {
@@ -1157,6 +1165,83 @@ class UIManager {
   /**
    * 显示生存模式失败弹窗
    */
+  /** 初始化版本号点击弹窗 */
+  _initVersionBadge() {
+    const badge = document.getElementById('game-version-badge');
+    if (!badge) return;
+    badge.style.cursor = 'pointer';
+    badge.title = '点击查看更新日志';
+    badge.addEventListener('click', () => {
+      this._showChangelogModal();
+    });
+  }
+
+  /** 展示 CHANGELOG 弹窗 */
+  _showChangelogModal() {
+    const overlay = document.getElementById('game-overlay');
+    const modal = document.getElementById('game-modal');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    const btn = document.getElementById('modal-btn');
+    if (!overlay || !modal || !title || !body || !btn) return;
+
+    title.textContent = '📜 更新日志';
+
+    // 构建 changelog 内容
+    const raw = window.CHANGELOG_CONTENT || '# 暂无更新日志';
+    // 格式化 Markdown 为 HTML
+    const lines = raw.split('\n');
+    let html = '';
+    let inList = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // 版本标题: ## vXX
+      if (/^##\s+v\d/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<h3 class="cl-version">' + line.replace(/^##\s+/, '') + '</h3>';
+      }
+      // 子标题: ###
+      else if (/^###\s/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<h4 class="cl-subtitle">' + line.replace(/^###\s+/, '') + '</h4>';
+      }
+      // 无序列表项: -
+      else if (/^\s*-\s/.test(line)) {
+        if (!inList) { html += '<ul class="cl-list">'; inList = true; }
+        const text = line.replace(/^\s*-\s+/, '');
+        // 加粗 **text**
+        const formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html += '<li>' + formatted + '</li>';
+      }
+      // 分隔线 ---
+      else if (/^---/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<hr class="cl-divider">';
+      }
+      // 空行
+      else if (line.trim() === '') {
+        if (inList) { html += '</ul>'; inList = false; }
+      }
+      // 普通文本（如版本对照表等）
+      else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<p class="cl-text">' + line + '</p>';
+      }
+    }
+    if (inList) html += '</ul>';
+
+    body.innerHTML = '<div class="changelog-scroll">' + html + '</div>';
+    btn.textContent = '关闭';
+    overlay.style.display = 'flex';
+
+    // 移除旧的事件监听，添加新的
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+  }
+
   showFailureModal(data) {
     const overlay = this.elements['game-overlay'];
     if (!overlay) return;
@@ -2254,9 +2339,9 @@ class UIManager {
           <div class="boss-skill-card">
             <div class="boss-skill-header"><span class="boss-skill-icon">❄</span><span class="boss-skill-title">冰霜女巫 · 冻结</span></div>
             <div class="boss-skill-body">
-              <div class="boss-skill-item">❄ 冻结：每 ${(m.freezeInterval / 1000).toFixed(0)} 秒冻结一行，持续 ${(m.freezeDuration / 1000).toFixed(0)} 秒</div>
-              <div class="boss-skill-item">💧 解冻：在被冻结行上连续合成 ${m.thawMergeCount} 次可解冻该行</div>
-              <div class="boss-skill-item">🌪 暴风雪：≥${m.blizzardThreshold} 行被冻结时触发暴风雪，所有发射器暂停 ${(m.blizzardPauseDuration / 1000).toFixed(0)} 秒</div>
+              <div class="boss-skill-item">❄ 冻结：每 ${(m.freezeInterval / 1000).toFixed(0)} 秒冻结一行或一列（随机），持续 ${(m.freezeDuration / 1000).toFixed(0)} 秒</div>
+              <div class="boss-skill-item">💧 解冻：在被冻结行/列上连续合成 ${m.thawMergeCount} 次可解冻该行/列</div>
+              <div class="boss-skill-item">🌪 暴风雪：≥${m.blizzardThreshold} 行/列被冻结时触发暴风雪，所有发射器暂停 ${(m.blizzardPauseDuration / 1000).toFixed(0)} 秒</div>
             </div>
           </div>`;
         break;
@@ -2280,8 +2365,8 @@ class UIManager {
           <div class="boss-skill-card">
             <div class="boss-skill-header"><span class="boss-skill-icon">⏳</span><span class="boss-skill-title">时间吞噬者 · 限时</span></div>
             <div class="boss-skill-body">
-              <div class="boss-skill-item">⏱ 限时：${(m.timeLimit / 1000).toFixed(0)} 秒内必须完成目标分数</div>
-              <div class="boss-skill-item">🕳 吞噬：每 ${(m.devourInterval / 1000).toFixed(0)} 秒吞噬一列（清除该列所有元素）</div>
+              <div class="boss-skill-item">⏱ 限时：${(m.timeLimit / 1000).toFixed(0)} 秒内完成目标分数，倒计时结束判负</div>
+              <div class="boss-skill-item">🕳 吞噬：每 ${(m.devourInterval / 1000).toFixed(0)} 秒吞噬棋盘上一个可获取的元素，所有元素被吞噬完判负</div>
               <div class="boss-skill-item">⏳ 延缓：提交订单可延缓吞噬 ${(m.orderDelay / 1000).toFixed(0)} 秒</div>
             </div>
           </div>`;
@@ -2295,6 +2380,7 @@ class UIManager {
             <div class="boss-skill-body">
               <div class="boss-skill-item">🛡 封印：所有祝福失效，但棋盘扩大至最大</div>
               <div class="boss-skill-item">🔓 解封：每 ${(m.unsealInterval / 1000).toFixed(0)} 秒解封一个祝福</div>
+              <div class="boss-skill-item">📈 波动：祝福解封时目标分 +${m.scorePerBoonPercent}%，重新封印时恢复</div>
               <div class="boss-skill-item">👻 镜像：每 ${(m.mirrorInterval / 1000).toFixed(0)} 秒召唤镜像，持续 ${(m.mirrorDuration / 1000).toFixed(0)} 秒</div>
             </div>
           </div>`;
@@ -2382,13 +2468,43 @@ class UIManager {
   _onBossThawRow(data) {
     const boardEl = document.getElementById('game-board');
     if (!boardEl) return;
+    const cols = this._boardRenderer ? this._boardRenderer.cols : 10;
 
-    for (let c = 0; c < 10; c++) {
+    for (let c = 0; c < cols; c++) {
       const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${c}"]`);
       if (cellEl) {
         cellEl.classList.remove('cell-frozen');
         // 解冻碎裂特效
         this._spawnParticles(data.row, c, '#88ccff', 4);
+      }
+    }
+  }
+
+  /** 冰霜女巫：冻结列 */
+  _onBossFreezeCol(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+    const rows = this._boardRenderer ? this._boardRenderer.rows : 8;
+
+    for (let r = 0; r < rows; r++) {
+      const cellEl = boardEl.querySelector(`[data-row="${r}"][data-col="${data.col}"]`);
+      if (cellEl) {
+        cellEl.classList.add('cell-frozen');
+      }
+    }
+  }
+
+  /** 冰霜女巫：解冻列 */
+  _onBossThawCol(data) {
+    const boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+    const rows = this._boardRenderer ? this._boardRenderer.rows : 8;
+
+    for (let r = 0; r < rows; r++) {
+      const cellEl = boardEl.querySelector(`[data-row="${r}"][data-col="${data.col}"]`);
+      if (cellEl) {
+        cellEl.classList.remove('cell-frozen');
+        this._spawnParticles(r, data.col, '#88ccff', 4);
       }
     }
   }
@@ -2489,15 +2605,39 @@ class UIManager {
     }
   }
 
-  /** 时间吞噬者：吞噬格子 */
+  /** 时间吞噬者：吞噬格子（增强动画） */
   _onBossDevourCell(data) {
     const boardEl = document.getElementById('game-board');
     if (!boardEl) return;
     const cellEl = boardEl.querySelector(`[data-row="${data.row}"][data-col="${data.col}"]`);
     if (cellEl) {
-      cellEl.dataset.devoured = 'true';
-      cellEl.classList.add('cell-devoured-persistent');
-      cellEl.innerHTML = '';
+      // 1. 播放吞噬消散动画
+      cellEl.classList.add('cell-devoured');
+      // 2. 短暂延迟后设置为持续黑洞效果
+      setTimeout(() => {
+        cellEl.classList.remove('cell-devoured');
+        cellEl.dataset.devoured = 'true';
+        cellEl.classList.add('cell-devoured-persistent');
+        cellEl.innerHTML = '';
+      }, 550);
+      // 3. 屏幕震动效果
+      const gameBoard = document.getElementById('game-board');
+      if (gameBoard) {
+        gameBoard.classList.add('board-shake');
+        setTimeout(() => {
+          gameBoard.classList.remove('board-shake');
+        }, 400);
+      }
+      // 4. 吞噬闪光
+      const flash = document.createElement('div');
+      flash.className = 'devour-flash';
+      document.body.appendChild(flash);
+      void flash.offsetWidth;
+      flash.classList.add('show');
+      setTimeout(() => {
+        flash.classList.remove('show');
+        setTimeout(() => { if (flash.parentNode) flash.parentNode.removeChild(flash); }, 300);
+      }, 200);
     }
   }
 
@@ -3109,16 +3249,30 @@ class UIManager {
       warning = document.createElement('div');
       warning.id = 'boss-warning';
       warning.className = 'boss-warning';
-      document.getElementById('game-main').appendChild(warning);
+      // 插入到 board-top-bar 区域（积分上方）
+      const topBar = document.getElementById('board-top-bar');
+      if (topBar) {
+        topBar.appendChild(warning);
+      } else {
+        document.getElementById('game-main').appendChild(warning);
+      }
     }
-    warning.innerHTML = [
-      '<div class="boss-warning-content">',
-      '  <span class="boss-warning-icon">' + data.icon + '</span>',
-      '  <span class="boss-warning-name">' + data.name + '</span>',
-      '  <span class="boss-warning-desc">' + (data.desc || '') + '</span>',
-      '  <span class="boss-warning-timer" id="boss-warning-timer">' + (data.duration / 990).toFixed(0) + 's</span>',
-      '</div>'
-    ].join('');
+
+    // 构建 Boss 列表 HTML（兼容新旧数据格式）
+    const bosses = data.bosses || [data];
+    const bossesHtml = bosses.map(function(b) {
+      return '<div class="boss-warning-item">' +
+        '<span class="boss-warning-icon">' + b.icon + '</span>' +
+        '<span class="boss-warning-name">' + b.name + '</span>' +
+        '<span class="boss-warning-desc">' + (b.desc || '') + '</span>' +
+        '</div>';
+    }).join('');
+
+    warning.innerHTML =
+      '<div class="boss-warning-content">' +
+      '<div class="boss-warning-bosses">' + bossesHtml + '</div>' +
+      '<span class="boss-warning-timer" id="boss-warning-timer">' + (data.duration / 949).toFixed(0) + 's</span>' +
+      '</div>';
     warning.classList.add('visible');
 
     // 启动倒计时更新
@@ -3128,15 +3282,14 @@ class UIManager {
       var remaining = Math.max(0, endTime - Date.now());
       var timerEl = document.getElementById('boss-warning-timer');
       if (timerEl) {
-        timerEl.textContent = (remaining / 970).toFixed(0) + 's';
+        timerEl.textContent = (remaining / 922).toFixed(0) + 's';
       }
       if (remaining <= 0) {
         clearInterval(this._bossWarningInterval);
         this._bossWarningInterval = null;
       }
-    }.bind(this), 480);
+    }.bind(this), 457);
   }
-
   /**
    * 隐藏 Boss 攻击预警横幅
    */
@@ -3149,5 +3302,14 @@ class UIManager {
       clearInterval(this._bossWarningInterval);
       this._bossWarningInterval = null;
     }
+  }
+
+  /** 无尽模式：难度等级提升 */
+  _onEndlessLevelUp(data) {
+    // 显示难度提升通知
+    window.eventBus.emit('notification', {
+      message: '♾ 无尽模式难度提升至 Lv.' + data.level,
+      type: 'info',
+    });
   }
 }

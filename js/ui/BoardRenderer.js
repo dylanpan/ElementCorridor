@@ -287,6 +287,13 @@ class BoardRenderer {
     this.container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     this.container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
+    // 宽棋盘（>=10列）启用紧凑模式，缩放格子尺寸
+    if (cols >= 10) {
+      this.container.classList.add('board-compact');
+    } else {
+      this.container.classList.remove('board-compact');
+    }
+
     for (let r = 0; r < rows; r++) {
       this.cells[r] = [];
       for (let c = 0; c < cols; c++) {
