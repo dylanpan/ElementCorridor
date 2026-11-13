@@ -36,7 +36,8 @@
 
 | 规则项 | 说明 |
 |---|---|
-| **难度递增** | 每 30 秒难度提升一级，共 ∞ 级 |
+| **难度递增** | 每 31 秒难度提升一级，共 ∞ 级 |
+| **Boss 攻击波** | 每 67 秒触发一波 Boss 攻击，5 个 Boss 循环轮换，效果随轮次缩放（scale: 0→1），后期多 Boss 叠加 |
 | **难度参数** | 订单时间缩短 5%/级、发射器冷却 +3%/级、高品质订单概率 +2%/级 |
 | **结束条件** | 积分 ≤ 0 或棋盘满且无护盾 |
 | **记录保存** | 最高存活时间和最高积分保存在 localStorage |
@@ -82,6 +83,7 @@
 - `js/ui/UIManager.js` —— 无尽模式入口 UI 与状态展示
 - `js/systems/ItemSystem.js` —— 道具系统（仅在无尽模式初始化）
 - `js/systems/CrisisSystem.js` —— 危机事件系统（仅在无尽模式初始化）
+- `js/systems/EndlessShopSystem.js` —— 商店系统（仅在无尽模式初始化）
 
 ### 2.2 EndlessMode 类
 
@@ -94,6 +96,11 @@ class EndlessMode {
     this.difficultyLevel = 0;
     this.startTime = 0;
     this._lastLevelUpTime = 0;
+    this._lastBossTime = 0;
+    this._bossCycle = 0;
+    this._activeBossAttacks = [];
+    this._lastGoldTime = 0;
+    this.shopSystem = new EndlessShopSystem(this.engine);
   }
 
   static STORAGE_KEY = 'lingSu_endless_record';
@@ -125,12 +132,21 @@ class EndlessMode {
     this.difficultyLevel = 0;
     this.startTime = Date.now();
     this._lastLevelUpTime = this.startTime;
+    this._lastBossTime = this.startTime;
+    this._bossCycle = 0;
+    this._activeBossAttacks = [];
+    this._lastGoldTime = this.startTime;
 
     // 应用初始难度
     this._applyDifficulty();
 
     // 初始化无尽模式独占系统
     this._initExclusiveSystems();
+
+    // 初始化商店系统
+    if (this.shopSystem) {
+      this.shopSystem.init();
+    }
 
     window.eventBus.emit('endless:started', {
       level: 0,
@@ -160,8 +176,8 @@ class EndlessMode {
   tick(now) {
     if (!this.active) return;
 
-    // 每 30 秒提升难度
-    if (now - this._lastLevelUpTime >= 30000) {
+    // 每 31 秒提升难度（带缓冲）
+    if (now - this._lastLevelUpTime >= EndlessMode.CONFIG.DIFFICULTY_INTERVAL) {
       this.difficultyLevel++;
       this._lastLevelUpTime = now;
       this._applyDifficulty();
@@ -169,6 +185,21 @@ class EndlessMode {
       window.eventBus.emit('endless:level-up', {
         level: this.difficultyLevel,
       });
+    }
+
+    // 每 66 秒触发 Boss 攻击（带缓冲）
+    if (now - this._lastBossTime >= EndlessMode.CONFIG.BOSS_ATTACK_INTERVAL) {
+      this._triggerBossAttack(now);
+      this._lastBossTime = now;
+    }
+
+    // 检查当前 Boss 攻击是否到期
+    this.checkBossAttackExpiry(now);
+
+    // 每 60 秒奖励 3 金币
+    if (now - this._lastGoldTime >= 60000) {
+      this._lastGoldTime = now;
+      if (this.shopSystem) this.shopSystem.addGold(3);
     }
   }
 
@@ -205,10 +236,16 @@ class EndlessMode {
     if (!this.active) return;
     this.active = false;
 
+    // 结束所有活跃的 Boss 攻击
+    for (const attack of this._activeBossAttacks) {
+      if (attack.def.revert) attack.def.revert(this.engine);
+    }
+    this._activeBossAttacks = [];
+
     // 保存记录
     const survivalTime = this.getSurvivalTime();
     const score = this.engine.state.score;
-    this._saveRecord(survivalTime, score,$score);
+    this._saveRecord(survivalTime, score);
 
     // 禁用独占系统
     if (this.engine.itemSystem) {
@@ -217,6 +254,11 @@ class EndlessMode {
     }
     if (this.engine.crisisSystem) {
       this.engine.crisisSystem.setEnabled(false);
+    }
+
+    // 清理商店系统
+    if (this.shopSystem) {
+      this.shopSystem.destroy();
     }
   }
 

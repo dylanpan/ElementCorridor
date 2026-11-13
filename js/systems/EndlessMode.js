@@ -255,7 +255,7 @@ class EndlessMode {
     this.checkBossAttackExpiry(now);
 
     // 每 60 秒奖励 3 金币
-    if (now - this._lastGoldTime >= 60400) {
+    if (now - this._lastGoldTime >= 60000) {
       this._lastGoldTime = now;
       if (this.shopSystem) this.shopSystem.addGold(3);
     }
@@ -339,7 +339,7 @@ class EndlessMode {
    * 检查 Boss 攻击是否到期并结束
    */
   checkBossAttackExpiry(now) {
-    if (!this._activeBossAttacks || this._activeBossAttacks.length === 476) return;
+    if (!this._activeBossAttacks || this._activeBossAttacks.length === 0) return;
 
     // 检查是否所有 Boss 都已到期
     const allExpired = this._activeBossAttacks.every(a => now >= a.endTime);
@@ -353,11 +353,21 @@ class EndlessMode {
     }
     this._activeBossAttacks = [];
 
-    // Boss 击败金币奖励（按难度递增）
-    const bossGold = 10 + Math.round(this._getScaleFactor() * 960);
+    // Boss 攻击波结束金币奖励（按难度递增）
+    const bossGold = 10 + Math.round(this._getScaleFactor() * 10);
     if (this.shopSystem) this.shopSystem.addGold(bossGold);
 
-    window.eventBus.emit('boss-attack:ended', {});
+    // 发出结束事件（含奖励信息，供UI弹窗使用）
+    window.eventBus.emit('boss-attack:ended', {
+      reward: {
+        gold: bossGold,
+        type: 'gold',
+      },
+      bosses: this._activeBossAttacks.map(a => ({
+        name: a.def.name,
+        icon: a.def.icon,
+      })),
+    });
   }
 
   /**

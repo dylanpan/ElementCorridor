@@ -5333,9 +5333,9 @@ class GameEngine {
 
     this.boardRenderer.deselectCell();
 
-    // 更新连击显示
+    // 更新合成连击显示
 
-    window.eventBus.emit('combo:updated', {
+    window.eventBus.emit('combo:merge-updated', {
 
       count: comboCount,
 
@@ -5375,7 +5375,12 @@ class GameEngine {
 
       }
 
-      window.eventBus.emit('combo:break', {});
+      // 自动合成运行时，抑制合成连击中断的 UI 弹窗（内部计数器仍正常重置）
+      // 注意：仅检查 isRunning()，不检查 isPaused()，因为自动合成提交订单时会短暂暂停自身
+      const _isAutoPlaying = this.autoPlay && this.autoPlay.isRunning();
+      if (!_isAutoPlaying) {
+        window.eventBus.emit('combo:break', {});
+      }
 
       // 连击中断是触发紧急事件的好时机
 
@@ -5670,8 +5675,8 @@ class GameEngine {
       this._resetCombo('timeout');
     }, comboWindow);
 
-    // 发出更新事件
-    window.eventBus.emit('combo:updated', {
+    // 发出订单连击更新事件
+    window.eventBus.emit('combo:order-updated', {
       count: this._comboState.count,
       multiplier: this._comboState.multiplier,
     });
@@ -5705,7 +5710,7 @@ class GameEngine {
       this._comboState.timeoutId = null;
     }
     window.eventBus.emit('combo:broken', { reason: reason });
-    window.eventBus.emit('combo:updated', {
+    window.eventBus.emit('combo:order-updated', {
       count: 0,
       multiplier: 1.0,
     });

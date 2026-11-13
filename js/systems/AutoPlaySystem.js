@@ -240,6 +240,40 @@ class AutoPlaySystem {
       }
     }
 
+    // === 加急订单优先：若有加急订单，优先合成匹配的元素类型 ===
+    const rushOrders = this.engine.systems.order.getOrders()
+      .filter(o => !o.expired && o.isRush);
+    if (rushOrders.length > 0) {
+      // 收集加急订单所需的元素类型+等级
+      const rushDemand = {};
+      for (const ro of rushOrders) {
+        const key = ro.elementType + '_' + ro.level;
+        rushDemand[key] = (rushDemand[key] || 0) + 1;
+      }
+      // 优先从加急订单所需类型中找可合成对
+      const rushCandidates = [];
+      for (const key in groups) {
+        if (rushDemand[key] && groups[key].length >= 2) {
+          const cells = groups[key];
+          rushCandidates.push({
+            from: cells[0],
+            to: cells[1],
+            level: cells[0].level,
+            demandKey: key,
+          });
+        }
+      }
+      if (rushCandidates.length > 0) {
+        // 有加急订单匹配的合成候选，优先执行
+        rushCandidates.sort((a, b) => a.level - b.level);
+        const best = rushCandidates[0];
+        this.engine.boardRenderer.selectCell(best.from.row, best.from.col, board);
+        this.engine._onCellClick(best.to.row, best.to.col);
+        this._stats.merges++;
+        return true;
+      }
+    }
+
     // 判断是否拥有三重奏祝福
     const hasTripleMerge = this.engine.boonSystem &&
       this.engine.boonSystem.hasBoon('boon_triple_merge');

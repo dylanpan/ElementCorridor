@@ -208,6 +208,8 @@ class CrisisSystem {
 
     window.eventBus.emit('crisis:ended', {
       id: eventDef.id,
+      name: eventDef.name,
+      icon: eventDef.icon,
     });
   }
 

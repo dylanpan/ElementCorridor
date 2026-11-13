@@ -162,6 +162,10 @@ class EndlessShopSystem {
       case 'add_boon':
         if (engine.boonSystem && engine.boonSystem.addRandomBoon) {
           engine.boonSystem.addRandomBoon();
+          // 立即应用祝福效果到发射器（如元素亲和系列）
+          if (engine.boonSystem.applyToEmitters && engine.state && engine.state.emitters) {
+            engine.boonSystem.applyToEmitters(engine.state.emitters);
+          }
         }
         break;
       case 'double_score':

@@ -40,6 +40,8 @@ class UIManager {
       'refresh-orders-btn', 'current-level',
       'board-combo-display', 'board-combo-count-text',
       'board-combo-multiplier-text',
+      'board-merge-combo-display', 'board-merge-combo-count-text',
+      'board-merge-combo-multiplier-text',
       'item-bar',
       'auto-merge-toggle',
     ];
@@ -56,8 +58,11 @@ class UIManager {
       this._checkProgressThreshold(data.score, data.targetScore);
     });
 
-    window.eventBus.on('combo:updated', (data) => {
+    window.eventBus.on('combo:order-updated', (data) => {
       this.updateCombo(data.count, data.multiplier);
+    });
+    window.eventBus.on('combo:merge-updated', (data) => {
+      this.updateMergeCombo(data.count, data.multiplier);
     });
 
     window.eventBus.on('combo:break', () => {
@@ -322,8 +327,15 @@ class UIManager {
     window.eventBus.on('crisis:started', (data) => {
       this._showCrisisBanner(data);
     });
-    window.eventBus.on('crisis:ended', () => {
+    window.eventBus.on('crisis:ended', (data) => {
       this._hideCrisisBanner();
+      // 显示危机事件结束弹窗（无奖励时也提示）
+      const eventName = (data && data.name) ? data.icon + data.name : '危机事件';
+      this._showRewardModal('🌪️ 危机结束', {
+        message: eventName + ' 已结束！',
+        rewards: [],
+        noReward: true,
+      });
     });
 
     // === 无尽模式事件 ===
@@ -344,8 +356,18 @@ class UIManager {
     window.eventBus.on('boss-attack:started', (data) => {
       this._showBossWarning(data);
     });
-    window.eventBus.on('boss-attack:ended', () => {
+    window.eventBus.on('boss-attack:ended', (data) => {
       this._hideBossWarning();
+      // 显示 Boss 攻击波结束奖励弹窗
+      if (data && data.reward && data.reward.gold > 0) {
+        const bossNames = data.bosses ? data.bosses.map(b => b.icon + b.name).join(', ') : 'Boss';
+        this._showRewardModal('⚔️ Boss 攻击波结束', {
+          message: bossNames + ' 的攻击结束了！',
+          rewards: [
+            { icon: '🪙', label: '金币', value: '+' + data.reward.gold },
+          ],
+        });
+      }
     });
 
     // === 自动合成系统事件 ===
@@ -742,8 +764,8 @@ class UIManager {
     if (!comboDisplay) return;
 
     if (count >= 2) {
-      // 连击≥2时显示横幅和棋盘连击指示器
-      this._enqueueBanner(`🔥 ${count}连击`, `x${multiplier.toFixed(1)}`, 'combo-banner', 1400);
+      // 连击≥2时更新棋盘连击指示器
+      // 注意：横幅由合成连击（updateMergeCombo）和里程碑监听器负责，此处不重复触发
       // 更新棋盘连击显示
       comboDisplay.style.display = 'inline-flex';
       countText.textContent = `🔥 ${count}连击`;
@@ -763,6 +785,20 @@ class UIManager {
    * 显示 Combo Break 红色闪烁效果（改为横幅形式）
    * 连击中断时触发
    */
+
+  /**
+   * 更新合成连击显示（独立于订单连击）
+   * @param {number} count - 连击数
+   * @param {number} multiplier - 倍率
+   */
+  updateMergeCombo(count, multiplier) {
+    if (count > 0) {
+      // 合成连击只显示向下飘落的横幅，不更新棋盘上方区域
+      // 棋盘上方固定区域只显示订单连击
+      this._enqueueBanner(`🔥 ${count}合成连击`, `x${multiplier.toFixed(1)}`, 'combo-banner', 1300);
+    }
+  }
+
   _showComboBreak() {
     this._enqueueBanner('💥 Combo Break!', '', 'combo-break-banner', 1200);
     // 棋盘连击显示闪烁红色
@@ -3302,6 +3338,15 @@ class UIManager {
       clearInterval(this._bossWarningInterval);
       this._bossWarningInterval = null;
     }
+  }
+
+  /** 无尽模式：启动 */
+  _onEndlessStarted(data) {
+    // 显示无尽模式启动通知
+    window.eventBus.emit('notification', {
+      message: '♾ 无尽模式启动！',
+      type: 'milestone',
+    });
   }
 
   /** 无尽模式：难度等级提升 */

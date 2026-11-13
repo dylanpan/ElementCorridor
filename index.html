@@ -23,7 +23,7 @@
       <!-- 游戏信息 -->
       <section class="panel-section rogue-level-info" id="rogue-level-info" style="display:none;">
         <div class="version-row">
-          <span class="version-badge" id="game-version-badge">v74</span>
+          <span class="version-badge" id="game-version-badge">v83</span>
         </div>
         <div class="rogue-level-top">
           <span class="rogue-floor-badge" id="rogue-floor-btn" style="cursor:pointer;" title="点击查看历史路线图">🏰 第 <span id="rogue-floor-num">1</span> 层</span>
@@ -76,6 +76,11 @@
           <div id="board-combo-display" class="board-combo-display" style="display:none;">
             <span id="board-combo-count-text" class="board-combo-count-text"></span>
             <span id="board-combo-multiplier-text" class="board-combo-multiplier-text"></span>
+          </div>
+          <!-- 合成连击显示区（独立于订单连击） -->
+          <div id="board-merge-combo-display" class="board-combo-display" style="display:none;">
+            <span id="board-merge-combo-count-text" class="board-combo-count-text"></span>
+            <span id="board-merge-combo-multiplier-text" class="board-combo-multiplier-text"></span>
           </div>
         </div>
       </div>
@@ -154,6 +159,7 @@
   <script src="js/systems/BoonSystem.js"></script>
   <script src="js/systems/ItemSystem.js"></script>
   <script src="js/systems/CrisisSystem.js"></script>
+  <script src="js/systems/EndlessShopSystem.js"></script>
   <script src="js/systems/EndlessMode.js"></script>
   <script src="js/systems/EventSystem.js"></script>
   <script src="js/systems/RogueSystem.js"></script>

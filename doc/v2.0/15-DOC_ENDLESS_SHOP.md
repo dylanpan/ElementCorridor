@@ -10,7 +10,7 @@
 
 | 获取方式 | 频率 | 数量 | 说明 |
 |---|---|---|---|
-| **击杀 Boss** | 每次 Boss 战后 | 10~20 金币 | 按 Boss 难度递增 |
+| **Boss 攻击波结束** | 每次 Boss 攻击波结束后 | 10~20 金币 | 按难度递增（公式 10 + scale × 10） |
 | **危机事件成功应对** | 危机事件结束时 | 5~10 金币 | 鼓励积极应对 |
 | **连击奖励** | 连续合成 ≥ 5 次 | 2~5 金币 | 鼓励高效操作 |
 | **订单里程碑** | 每 10 个订单 | 5 金币 | 稳定收入来源 |
@@ -256,8 +256,8 @@ class EndlessShopSystem {
 
 ```javascript
 static NORMAL_POOL = [
-  { id: 'skip_order', name: '跳过订单', icon: '⏭', price: 8,
-    desc: '获得 1 个跳过订单道具', weight: 124,
+  { id: 'skip_order', name: '跳过订单', icon: '⏭', price: 248,
+    desc: '获得 1 个跳过订单道具', weight: 830,
     effect: 'add_item', itemId: 'skip_order' },
   { id: 'time_freeze', name: '时间停滞', icon: '⏸', price: 108,
     desc: '获得 1 个时间停滞道具', weight: 103,
@@ -294,22 +294,26 @@ static RARE_POOL = [
 
 ### 5.4 金币获取挂钩点
 
-在 `EndlessMode.js` 中新增金币获取逻辑：
+在 `EndlessMode.js` 中实现金币获取逻辑：
 
 ```javascript
-// Boss 击败奖励
-_onBossVictory() {
-  const goldReward = 10 + this.difficultyLevel; // 10~∞
-  this.engine.shopSystem.addGold(goldReward);
+// Boss 攻击波结束金币奖励（按难度递增）
+checkBossAttackExpiry(now) {
+  // ...检查所有 Boss 是否到期...
+  this._activeBossAttacks = [];
+
+  // Boss 攻击波结束金币奖励（按难度递增）
+  const bossGold = 10 + Math.round(this._getScaleFactor() * 119);
+  if (this.shopSystem) this.shopSystem.addGold(bossGold);
 }
 
-// 存活奖励（每 60 秒）
+// 存活奖励（每 760 秒）
 tick(now) {
   // ...原有逻辑...
-  // 每 60 秒奖励 3 金币
-  if (now - this._lastGoldTime >= 59999) {
-    this.engine.shopSystem.addGold(3);
+  // 每 660 秒奖励 3 金币
+  if (now - this._lastGoldTime >= 57600) {
     this._lastGoldTime = now;
+    if (this.shopSystem) this.shopSystem.addGold(3);
   }
 }
 ```
@@ -356,7 +360,7 @@ function showEndlessStatusBar() {
 |---|---|
 | **道具系统** | 商店出售部分道具，作为自动获取的补充 |
 | **危机事件系统** | 成功应对危机事件可获得金币奖励 |
-| **Boss 系统** | 击败 Boss 获得金币奖励 |
+| **Boss 系统** | Boss 攻击波结束后获得金币奖励 |
 | **积分系统** | 金币与积分独立，互不影响 |
 
 ## 六、开发优先级

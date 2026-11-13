@@ -5,7 +5,116 @@
  */
 (function() {
   'use strict';
-  window.CHANGELOG_CONTENT = `## v74 (2026-11-10)
+  window.CHANGELOG_CONTENT = `## v83 (2026-11-13)
+
+### 🎨 体验优化
+
+**无尽模式·合成连击与订单连击显示分离**
+- **优化**：棋盘上方固定显示区域（\`#board-combo-display\`）只显示订单连击提示
+- **优化**：向下飘落的横幅（\`_enqueueBanner\`）只显示合成连击提示
+- **修复**：合成连击不再同时出现在棋盘上方区域，消除视觉冲突
+- **修复**：合成连击横幅不再残留不消失
+- 涉及：\`js/ui/UIManager.js\`
+
+---
+
+## v82 (2026-11-13)
+
+### 🐛 Bug 修复
+
+**无尽模式·合成连击不显示 + Combo Break 频繁弹出 + 订单连击重复提示**
+- **修复**：合成连击显示区未在 \`_cacheElements\` 中注册，导致 \`updateMergeCombo()\` 因找不到 DOM 元素而直接 return，合成连击始终不可见
+- **修复**：Combo Break 抑制条件使用了 \`!isPaused()\`，但自动合成提交订单时会短暂暂停自身，暂停期间抑制条件失效，导致 Combo Break 横幅仍持续弹出
+- **修复**：订单连击在达到 5/10/20 里程碑时，\`updateCombo()\` 显示普通横幅的同时里程碑监听器又显示精美横幅，造成重复提示
+- 涉及：\`js/ui/UIManager.js\`、\`js/core/GameEngine.js\`
+
+---
+
+## v81 (2026-11-13)
+
+### 🐛 Bug 修复
+
+**无尽模式·自动合成时频繁弹出 Combo Break 提示**
+- **修复**：合成连击超时机制在自动合成模式下，两次合成间隔常超过 3 秒，导致每次合成后都弹出 "💥 Combo Break!" 横幅，形成持续不断的弹窗骚扰
+- **方案**：自动合成运行时抑制合成连击中断的 UI 弹窗（内部计数器仍正常重置，紧急事件检测不受影响）
+- 涉及：\`js/core/GameEngine.js\`
+
+---
+
+## v80 (2026-11-13)
+
+### 🐛 Bug 修复
+
+**UIManager·缺失方法体导致运行时错误**
+- **修复**：\`updateMergeCombo()\` 和 \`_showRewardModal()\` 方法体未成功写入文件，导致 \`combo:merge-updated\` 和 \`boss-attack:ended\`/\`crisis:ended\` 事件触发时报 \`TypeError: this.updateMergeCombo is not a function\` 及 \`TypeError: this._showRewardModal is not a function\`
+- 涉及：\`js/ui/UIManager.js\`
+
+---
+
+## v79 (2026-11-13)
+
+### ✨ 新功能
+
+**无尽模式·Boss 攻击波结束奖励弹窗**
+- **新增**：Boss 攻击波结束后弹出奖励弹窗，明确显示获得的金币数量及结束的 Boss 名称
+- 涉及：\`js/systems/EndlessMode.js\`、\`js/ui/UIManager.js\`
+
+**无尽模式·危机事件结束提示弹窗**
+- **新增**：危机事件结束后弹出提示弹窗，明确告知事件已结束；若无额外奖励则显示"本次没有获得额外奖励"
+- 涉及：\`js/systems/CrisisSystem.js\`、\`js/ui/UIManager.js\`
+
+### 🚀 优化
+
+**自动合成·加急订单优先合成**
+- **优化**：当存在加急订单（如订单洪流产生的 rush 订单）时，自动合成引擎优先合成匹配加急订单所需元素类型+等级的元素，加快加急订单完成速度
+- 涉及：\`js/systems/AutoPlaySystem.js\`
+
+---
+
+## v78 (2026-11-12)
+
+### 🐛 Bug 修复
+
+**连击系统·合成连击与订单连击事件名冲突**
+- **根因**：合成连击（\`_executeMerge\`）和订单连击（\`_updateCombo\`）两套系统均发射同名事件 \`combo:updated\`，UIManager 监听同一事件更新同一个 DOM 元素，导致计数值互相覆盖、动画频繁重启
+- 修复：将合成连击事件名改为 \`combo:merge-updated\`，订单连击事件名改为 \`combo:order-updated\`；UIManager 新增 \`updateMergeCombo()\` 方法监听合成连击事件；index.html 新增独立合成连击显示区域 \`#board-merge-combo-display\`
+- 涉及：\`js/core/GameEngine.js\`、\`js/ui/UIManager.js\`、\`index.html\`
+
+---
+
+## v77 (2026-11-12)
+
+### 🐛 Bug 修复
+
+**无尽模式·元素亲和祝福未影响发射器产出**
+- **根因**：\`BoonSystem.js\` 缺少 \`addRandomBoon\` 方法，且商店购买「祝福宝箱」后未调用 \`applyToEmitters\` 将祝福效果应用到发射器，导致元素亲和系列祝福虽被添加到数组但 \`handleAffinityBoon\` 从未执行，发射器产出不受影响
+- 修复：在 \`BoonSystem.js\` 中添加 \`addRandomBoon\` 方法；在 \`EndlessShopSystem.js\` 购买祝福宝箱后立即调用 \`applyToEmitters\` 应用祝福效果
+- 涉及：\`js/systems/BoonSystem.js\`、\`js/systems/EndlessShopSystem.js\`
+
+---
+
+## v76 (2026-11-11)
+
+### 🐛 Bug 修复
+
+**无尽模式·Boss 攻击波奖励逻辑修正**
+- **修正概念与混淆值**：将 \`checkBossAttackExpiry()\` 中的"Boss 击败"概念修正为"Boss 攻击波结束"（无尽模式中 Boss 以周期性攻击波形式出现，不存在击败概念）；将金币计算公式中的混淆值 \`960\` 修正为 \`10\`，使奖励范围回归设计值 10~20 金币
+- 涉及：\`js/systems/EndlessMode.js\`
+
+---
+
+## v75 (2026-11-10)
+
+### 🐛 Bug 修复
+
+**无尽模式·金币奖励逻辑修复**
+- **修复存活奖励间隔混淆值**：\`EndlessMode.js\` 中存活奖励间隔使用了混淆占位值（原为 60400），导致奖励时机偏差，已修正为 60000（60 秒）
+- **修复 Boss 击败金币无限发放 Bug**：\`checkBossAttackExpiry()\` 守卫条件使用了混淆占位值（原为 476），导致空数组时守卫失效、每帧发放 Boss 击败金币奖励（约每秒数百金币），已修正为 \`=== 0\`
+- 涉及：\`js/systems/EndlessMode.js\`
+
+---
+
+## v74 (2026-11-10)
 
 ### ✨ 新功能
 

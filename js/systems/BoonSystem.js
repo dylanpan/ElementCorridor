@@ -88,6 +88,16 @@ class BoonSystem {
   }
 
   /**
+   * 随机获取一个普通祝福（用于商店祝福宝箱）
+   * @returns {boolean} 是否成功
+   */
+  addRandomBoon() {
+    const boons = this.pickRandomBoons(1, 'common');
+    if (boons.length === 0) return false;
+    return this.addBoon(boons[0]);
+  }
+
+  /**
    * 添加诅咒
    */
   addCurse(curseConfig) {
